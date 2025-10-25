@@ -1407,45 +1407,207 @@ Return ONLY the JSON object, no other text.`;
       }
     }
 
+    // ========== DOMAIN EXTRACTION & VALIDATION ==========
+    // Prevents domain pivoting bug by extracting practitioners and validating suggestions
+
+    async function extractDomainContext(requirements, detectedDomain) {
+      /**
+       * Extract comprehensive domain context including practitioners and exclusions
+       * Returns domain metadata to constrain Problem Identifier Agent
+       */
+      const prompt = `Extract domain context from this skill request to prevent domain pivoting.
+
+Skill Request: ${requirements.skill_name}
+Description: ${requirements.description || 'N/A'}
+Detected Domain: ${detectedDomain}
+
+Return JSON with:
+{
+  "primary_domain": "exact domain name (e.g., 'web research', 'motion design', 'backend coding')",
+  "domain_category": "CREATIVE|CODING|RESEARCH|AUTOMATION|FINANCE|DESIGN|WORKFLOW|DATA|COMMUNICATION",
+  "domain_practitioners": ["list of 2-4 specific practitioner types who work in this domain"],
+  "domain_context": "brief 1-sentence explanation of what this domain involves",
+  "excluded_domains": ["list of 3-5 related but DIFFERENT domains to NOT pivot to"]
+}
+
+Examples:
+
+Input: "web research analyst skill"
+Output: {
+  "primary_domain": "web research",
+  "domain_category": "RESEARCH",
+  "domain_practitioners": ["journalists", "researchers", "competitive analysts", "fact-checkers"],
+  "domain_context": "Research and verification of information from web sources",
+  "excluded_domains": ["investment research", "financial analysis", "M&A due diligence", "market research", "academic research"]
+}
+
+Input: "motion design skill"
+Output: {
+  "primary_domain": "motion design",
+  "domain_category": "CREATIVE",
+  "domain_practitioners": ["animators", "motion designers", "VFX artists", "animation directors"],
+  "domain_context": "Creating animated motion graphics and visual effects",
+  "excluded_domains": ["product design", "UX design", "frontend development", "game development", "video editing"]
+}
+
+Input: "database schema generator"
+Output: {
+  "primary_domain": "backend coding",
+  "domain_category": "CODING",
+  "domain_practitioners": ["backend engineers", "database engineers", "API developers", "systems architects"],
+  "domain_context": "Server-side development and database management",
+  "excluded_domains": ["frontend development", "DevOps", "data science", "data analytics", "cloud architecture"]
+}
+
+Return ONLY the JSON object.`;
+
+      try {
+        let response = await callClaude(prompt, 500);
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        return JSON.parse(response);
+      } catch (err) {
+        // Fallback to basic domain context
+        return {
+          primary_domain: detectedDomain,
+          domain_category: "GENERAL",
+          domain_practitioners: ["practitioners", "users", "professionals"],
+          domain_context: `Work in the ${detectedDomain} domain`,
+          excluded_domains: ["other domains", "unrelated industries"]
+        };
+      }
+    }
+
+    async function validateDomainRelevance(userDomain, problemAnalysis, practitioners) {
+      /**
+       * Validate that ALL suggestions stay within the user's specified domain
+       * Returns validation results with scores and issues
+       */
+      const suggestions = problemAnalysis.redesign_suggestions || [];
+      const validationResults = [];
+      const scores = [];
+
+      for (let i = 0; i < suggestions.length; i++) {
+        const suggestion = suggestions[i];
+
+        // Check if domain_relevance_score is present and sufficient
+        const score = suggestion.domain_relevance_score || 0;
+        scores.push(score);
+
+        if (score < 7) {
+          validationResults.push({
+            suggestion: suggestion.redesigned_skill,
+            issue: `Low domain relevance score: ${score}/10 (minimum 7 required)`,
+            score: score,
+            recommendation: 'REJECT'
+          });
+        }
+
+        // Validate that suggestion mentions user domain practitioners or domain
+        const suggestionText = JSON.stringify(suggestion).toLowerCase();
+        const domainLower = userDomain.toLowerCase();
+        const practitionersFound = practitioners.some(p =>
+          suggestionText.includes(p.toLowerCase())
+        );
+        const domainMentioned = suggestionText.includes(domainLower);
+
+        if (!practitionersFound && !domainMentioned) {
+          validationResults.push({
+            suggestion: suggestion.redesigned_skill,
+            issue: `Does not mention ${userDomain} domain or its practitioners`,
+            score: score,
+            recommendation: 'REJECT'
+          });
+        }
+      }
+
+      return {
+        domain: userDomain,
+        total_suggestions: suggestions.length,
+        validation_issues: validationResults,
+        all_relevant: validationResults.length === 0,
+        scores: scores,
+        issues: validationResults,
+        recommendation: validationResults.length === 0 ? 'PROCEED' : 'REVISE'
+      };
+    }
+
+    // ========== PROBLEM IDENTIFIER AGENT ==========
+
     async function analyzeProblem(requirements, utilityAnalysis) {
       addLog('Identifying real practitioner problems...', 'info');
       updateProgress('Problem Analysis', 30, 'Researching domain pain points...');
 
-      const prompt = `You are the Problem Identifier Agent. Your job is to research what
-practitioners in a given domain actually struggle with, then suggest
-skill redesigns grounded in those real problems.
+      // Step 1: Enhanced domain extraction with practitioners
+      addLog(`Extracting domain context for: ${utilityAnalysis.domain}`, 'info');
+      const domainContext = await extractDomainContext(requirements, utilityAnalysis.domain);
+      addLog(`✓ Domain identified: ${domainContext.primary_domain}`, 'success');
+      addLog(`✓ Domain practitioners: ${domainContext.domain_practitioners.join(', ')}`, 'info');
+
+      const prompt = `You are the Problem Identifier Agent for the ${domainContext.primary_domain} domain.
+
+⚠️ CRITICAL CONSTRAINT - DOMAIN LOCK ⚠️
+ALL problem identification and redesign suggestions must be grounded EXCLUSIVELY
+in the ${domainContext.primary_domain} domain and for practitioners who work in
+this domain. Do NOT pivot to other industries or domains.
+
+Domain: ${domainContext.primary_domain}
+Practitioners: ${domainContext.domain_practitioners.join(', ')}
+Domain Context: ${domainContext.domain_context}
+
+🚫 DO NOT PIVOT TO THESE UNRELATED DOMAINS:
+${domainContext.excluded_domains.map(d => `- ${d}`).join('\n')}
+
+Your job is to research what practitioners in the ${domainContext.primary_domain}
+domain actually struggle with, then suggest skill redesigns grounded in those
+real problems.
 
 Given a skill request, answer:
 
-1. PRACTITIONER PAIN POINTS
-   - What do people in this domain struggle with? (Be specific, not generic)
+1. PRACTITIONER PAIN POINTS (MUST BE IN ${domainContext.primary_domain.toUpperCase()})
+   - What do ${domainContext.domain_practitioners.join(' or ')} struggle with? (Be specific, not generic)
    - What's their current workaround? (How do they solve it today?)
    - What does this problem cost them? (Time, money, errors)
    - How often do they face this? (Daily, per project, rare?)
    - Example: Not "budgeting is hard" but "predicting multi-location
      shoot costs with labor conflicts takes 8+ hours per production"
 
-2. CLAUDE CAPABILITY GAP
-   - What specifically can't Claude do well? (Not "general advice")
+   ⚠️ VERIFY: Does this problem apply to ${domainContext.domain_practitioners.join(' or ')}
+   in ${domainContext.primary_domain}? If NO, find a different problem.
+
+2. CLAUDE CAPABILITY GAP (SPECIFIC TO ${domainContext.primary_domain.toUpperCase()})
+   - What specifically can't Claude do well for ${domainContext.primary_domain}? (Not "general advice")
    - What would Claude need to do this? (Be concrete)
    - Example: "Claude can discuss budgeting but cannot model
      constraint satisfaction with location-specific dependencies"
 
-3. VALUE UNLOCK
-   - What would solving this unlock? (Measurable outcome)
+3. VALUE UNLOCK (MEASURABLE FOR ${domainContext.primary_domain.toUpperCase()} PRACTITIONERS)
+   - What would solving this unlock for ${domainContext.domain_practitioners.join(' or ')}? (Measurable outcome)
    - How much time/money would it save? (Be specific)
    - What becomes possible? (New capability)
    - Example: "Generating accurate cost predictions in minutes vs.
      8+ hours, preventing 5-15% budget overruns"
 
 Then suggest 2-3 redesigns where each:
-- Targets ONE specific practitioner pain point
-- States what Claude can't do that's needed
+- Targets ONE specific practitioner pain point IN ${domainContext.primary_domain.toUpperCase()}
+- States what Claude can't do that's needed FOR ${domainContext.primary_domain.toUpperCase()}
 - Shows why it would be HIGH_UTILITY
-- Includes measurable outcome
+- Includes measurable outcome FOR ${domainContext.domain_practitioners.join(' or ')}
 - Describes specific implementation (what data in → what out)
 
-Focus on PROBLEMS, not generic technical additions.
+Focus on PROBLEMS in ${domainContext.primary_domain}, not generic technical additions.
+
+❌ EXAMPLE OF BAD DOMAIN PIVOTING (DO NOT DO THIS):
+  User domain: "web research"
+  Bad suggestion: "Investment analyst due diligence problems" ← WRONG! Different domain!
+
+✅ EXAMPLE OF GOOD DOMAIN-CONSTRAINED APPROACH:
+  User domain: "web research"
+  Good suggestion: "Cross-reference contradiction detector for journalists" ← CORRECT! Same domain!
+
+If you cannot find domain-relevant problems that would be solved by a higher-utility
+skill in ${domainContext.primary_domain}, explicitly state:
+"No high-utility redesign opportunities identified in ${domainContext.primary_domain}.
+The original skill concept may not have sufficient problem-solving potential in this domain."
 
 SKILL REQUIREMENTS:
 ${JSON.stringify(requirements, null, 2)}
@@ -1458,32 +1620,47 @@ Power-up: ${utilityAnalysis.power_up_statement}
 
 Return JSON with this exact structure:
 {
+  "domain_analysis": {
+    "user_specified_domain": "${domainContext.primary_domain}",
+    "domain_verified": true,
+    "domain_constraints_applied": true,
+    "practitioners_analyzed": ${JSON.stringify(domainContext.domain_practitioners)}
+  },
   "domain_research": {
     "practitioner_pain_points": [
       {
-        "problem": "Specific problem practitioners face",
+        "problem": "Specific problem practitioners face IN ${domainContext.primary_domain.toUpperCase()}",
         "why_hard": "What makes this challenging",
         "current_workaround": "How they solve it now",
         "cost_of_problem": "Time/money/errors cost",
-        "frequency": "How often this occurs"
+        "frequency": "How often this occurs",
+        "domain_relevance_score": 8-10
       }
     ],
-    "claude_capability_gap": "What Claude specifically cannot do well for this domain",
-    "value_unlock": "What would be unlocked by solving this"
+    "claude_capability_gap": "What Claude specifically cannot do well for ${domainContext.primary_domain}",
+    "value_unlock": "What would be unlocked by solving this FOR ${domainContext.domain_practitioners.join(' or ')}"
   },
   "redesign_suggestions": [
     {
       "original_skill": "${requirements.skill_name}",
       "redesigned_skill": "new-skill-name with specific capability",
-      "problem_it_solves": "Specific practitioner pain point addressed",
-      "claude_power_up": "Specific capability this adds to Claude",
+      "problem_it_solves": "Specific practitioner pain point addressed IN ${domainContext.primary_domain.toUpperCase()}",
+      "claude_power_up": "Specific capability this adds to Claude FOR ${domainContext.primary_domain.toUpperCase()}",
       "estimated_utility_score": 7-9,
       "why_higher_utility": "Why this scores higher than original",
-      "measurable_outcome": "Concrete, measurable result",
-      "specific_implementation": "What data goes in → what comes out"
+      "measurable_outcome": "Concrete, measurable result FOR ${domainContext.domain_practitioners.join(' or ')}",
+      "specific_implementation": "What data goes in → what comes out",
+      "domain_relevance_score": 8-10,
+      "domain_fit_explanation": "Why this is relevant to ${domainContext.primary_domain}"
     }
   ]
 }
+
+⚠️ FINAL VALIDATION BEFORE RETURNING:
+Review ALL suggestions and verify EVERY problem/redesign is exclusively relevant
+to ${domainContext.primary_domain} and its practitioners. If ANY suggestion
+mentions or targets a different domain, REJECT it and replace with an in-domain
+alternative.
 
 Return ONLY the JSON object, no markdown, no other text.`;
 
@@ -1491,6 +1668,25 @@ Return ONLY the JSON object, no markdown, no other text.`;
         let response = await callClaude(prompt, 2500);
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const problemAnalysis = JSON.parse(response);
+
+        // Step 2: Validate domain relevance of all suggestions
+        addLog('Validating problem domain relevance...', 'info');
+        const validation = await validateDomainRelevance(
+          domainContext.primary_domain,
+          problemAnalysis,
+          domainContext.domain_practitioners
+        );
+
+        if (validation.all_relevant) {
+          addLog(`✓ All ${validation.total_suggestions} suggestions verified in-domain`, 'success');
+          addLog(`✓ Domain relevance scores: ${validation.scores.join(', ')}`, 'info');
+        } else {
+          addLog(`⚠ ${validation.issues.length} domain pivoting issues detected`, 'warning');
+          validation.issues.forEach(issue => {
+            addLog(`  - ${issue.suggestion}: ${issue.issue}`, 'warning');
+          });
+          throw new Error('Domain pivoting detected - suggestions cross into unrelated domains');
+        }
 
         addLog('Problem analysis complete', 'success');
         updateProgress('Problem Analysis', 100, 'Problem-grounded redesigns identified');
@@ -2058,10 +2254,18 @@ Return ONLY the JSON object, no markdown, no other text.`;
                           document.getElementById('rejectAlternatives');
 
       const research = problemAnalysis.domain_research;
+      const domainAnalysis = problemAnalysis.domain_analysis || {};
 
       let html = `
         <div style="background: rgba(138, 180, 248, 0.08); border: 1px solid rgba(138, 180, 248, 0.2); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <h3 style="color: var(--accent-primary); margin-bottom: 16px;">⚠️ Real Problem Identified</h3>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <h3 style="color: var(--accent-primary); margin: 0;">⚠️ Real Problem Identified</h3>
+            ${domainAnalysis.user_specified_domain ? `
+              <span style="background: rgba(138, 180, 248, 0.15); border: 1px solid rgba(138, 180, 248, 0.4); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;">
+                ${domainAnalysis.user_specified_domain}
+              </span>
+            ` : ''}
+          </div>
       `;
 
       // Display pain points
@@ -2103,14 +2307,29 @@ Return ONLY the JSON object, no markdown, no other text.`;
       if (problemAnalysis.redesign_suggestions && problemAnalysis.redesign_suggestions.length > 0) {
         problemAnalysis.redesign_suggestions.forEach((suggestion, index) => {
           const scoreColor = suggestion.estimated_utility_score >= 8 ? 'var(--accent-secondary)' : '#fdd663';
+          const domainRelevanceScore = suggestion.domain_relevance_score || 'N/A';
+          const domainRelevanceColor = domainRelevanceScore >= 8 ? 'var(--accent-secondary)' : domainRelevanceScore >= 7 ? '#fdd663' : '#f8b4ae';
+
           html += `
             <div style="background: rgba(30, 33, 39, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 16px; cursor: pointer; transition: all 0.3s ease;"
                  onmouseover="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(138, 180, 248, 0.08)';"
                  onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.background='rgba(30, 33, 39, 0.6)';"
                  onclick='selectRedesign("${suggestion.redesigned_skill.replace(/"/g, '&quot;')}")'>
-              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                <h4 style="color: var(--accent-primary); margin: 0; font-size: 16px; flex: 1;">${suggestion.redesigned_skill}</h4>
-                <div style="background: ${scoreColor}20; border: 1px solid ${scoreColor}; border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: ${scoreColor};">
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; gap: 8px;">
+                <div style="flex: 1;">
+                  <h4 style="color: var(--accent-primary); margin: 0 0 8px 0; font-size: 16px;">${suggestion.redesigned_skill}</h4>
+                  ${domainAnalysis.user_specified_domain ? `
+                    <div style="display: inline-flex; align-items: center; gap: 6px;">
+                      <span style="background: rgba(138, 180, 248, 0.12); border: 1px solid rgba(138, 180, 248, 0.3); border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: var(--accent-primary); text-transform: uppercase;">
+                        ${domainAnalysis.user_specified_domain}
+                      </span>
+                      <span style="color: ${domainRelevanceColor}; font-size: 10px; font-weight: 600;">
+                        Domain Fit: ${domainRelevanceScore}/10
+                      </span>
+                    </div>
+                  ` : ''}
+                </div>
+                <div style="background: ${scoreColor}20; border: 1px solid ${scoreColor}; border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: ${scoreColor}; white-space: nowrap;">
                   ${suggestion.estimated_utility_score}/10 ⬆️
                 </div>
               </div>
@@ -2126,6 +2345,12 @@ Return ONLY the JSON object, no markdown, no other text.`;
                 <strong style="color: var(--text-secondary); font-size: 13px;">Outcome:</strong>
                 <p style="margin: 4px 0; font-size: 14px; line-height: 1.6;">${suggestion.measurable_outcome}</p>
               </div>
+              ${suggestion.domain_fit_explanation ? `
+              <div style="margin-bottom: 12px;">
+                <strong style="color: var(--text-secondary); font-size: 13px;">Domain Fit:</strong>
+                <p style="margin: 4px 0; font-size: 13px; line-height: 1.5; color: var(--accent-primary);">${suggestion.domain_fit_explanation}</p>
+              </div>
+              ` : ''}
               <div style="background: rgba(10, 11, 13, 0.4); border-radius: 8px; padding: 12px; margin-top: 12px;">
                 <strong style="color: var(--text-secondary); font-size: 12px;">Implementation:</strong>
                 <p style="margin: 4px 0; font-size: 13px; font-family: 'SF Mono', monospace; line-height: 1.5;">${suggestion.specific_implementation}</p>
