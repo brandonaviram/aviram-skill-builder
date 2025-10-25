@@ -949,6 +949,78 @@ The more texture you give, the sharper the output. But even 'email automation' i
           </div>
         </div>
 
+        <div class="aviram-surface hidden" id="utilityCard">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h2 style="margin: 0;">Utility Analysis</h2>
+            <a class="reset-link" onclick="resetFactory()">← New</a>
+          </div>
+
+          <div id="utilityResults">
+            <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+              <div style="flex: 1;">
+                <h3>Utility Score</h3>
+                <div style="font-size: 48px; font-weight: 700; color: var(--accent-primary);" id="utilityScoreDisplay">-/10</div>
+                <div id="utilityCategoryDisplay" style="font-size: 14px; font-weight: 600; margin-top: 8px;"></div>
+              </div>
+              <div style="flex: 2;">
+                <h3>Power-Up Statement</h3>
+                <p id="powerUpStatement" style="font-size: 15px; line-height: 1.6; color: var(--text-primary);"></p>
+              </div>
+            </div>
+
+            <div style="margin: 24px 0;">
+              <h3>Reasoning</h3>
+              <p id="utilityReasoning" style="color: var(--text-secondary); line-height: 1.7;"></p>
+            </div>
+
+            <div id="utilityProceedSection" class="hidden">
+              <div class="status-badge success">
+                ✓ HIGH UTILITY - Proceeding to Research
+              </div>
+              <p style="margin: 16px 0; color: var(--text-secondary);">
+                <strong>Research Direction:</strong> <span id="researchDirection"></span>
+              </p>
+              <button class="btn success" onclick="continueToResearch()">
+                Continue to Research Phase →
+              </button>
+            </div>
+
+            <div id="utilityRedesignSection" class="hidden">
+              <div class="status-badge" style="background: rgba(251, 188, 5, 0.12); border-color: rgba(251, 188, 5, 0.4); color: #fdd663;">
+                ⚠ MEDIUM UTILITY - Redesign Recommended
+              </div>
+              <p style="margin: 16px 0; color: var(--text-secondary);">
+                This skill has value but could be more focused. Choose a redesign suggestion or proceed anyway:
+              </p>
+              <div id="redesignOptions" style="margin: 20px 0;"></div>
+              <div class="button-group">
+                <button class="btn btn-secondary" onclick="proceedAnyway()">
+                  Proceed Anyway
+                </button>
+                <button class="btn" onclick="resetFactory()">
+                  Start Over
+                </button>
+              </div>
+            </div>
+
+            <div id="utilityRejectSection" class="hidden">
+              <div class="status-badge error">
+                ✗ LOW UTILITY - Rejected
+              </div>
+              <p style="margin: 16px 0; color: var(--text-secondary);">
+                <strong>Rejection Reason:</strong> <span id="rejectionReason"></span>
+              </p>
+              <p style="margin: 16px 0; color: var(--text-secondary);">
+                Consider these high-utility alternatives instead:
+              </p>
+              <div id="rejectAlternatives" style="margin: 20px 0;"></div>
+              <button class="btn" onclick="resetFactory()">
+                Try New Skill Request
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="aviram-surface hidden" id="progressCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
             <h2 style="margin: 0;">Progress</h2>
@@ -1032,7 +1104,7 @@ The more texture you give, the sharper the output. But even 'email automation' i
     let generatedSkillData = null;
     let isGenerating = false;
 
-    const steps = ['Input', 'Research', 'Generate', 'Validate', 'Package'];
+    const steps = ['Input', 'Utility Analysis', 'Research', 'Generate', 'Validate', 'Package'];
     const API_KEY_STORAGE_KEY = 'anthropic_api_key';
 
     // API Key localStorage Management
@@ -1262,6 +1334,201 @@ Return ONLY valid JSON (no markdown):
       } catch (err) {
         throw new Error(`Failed to extract requirements: ${err.message}`);
       }
+    }
+
+    async function analyzeUtility(requirements) {
+      addLog('Analyzing skill utility...', 'info');
+      updateProgress('Utility Analysis', 10, 'Evaluating utility value...');
+
+      const prompt = `You are the Universal Utility Analyzer. Your job is to determine whether
+a skill request will genuinely power up Claude or if it's just organized
+documentation that Claude can already produce.
+
+Your north star: Skills should make Claude measurably better at something,
+not just give it well-organized information it already has.
+
+Evaluate this skill request using the three universal questions:
+
+1. Can Claude already do this well from training data?
+2. What specific value does this skill provide that Claude doesn't have?
+   - Executable code solving hard problems?
+   - Embedded domain data or algorithms?
+   - Non-obvious patterns/edge cases?
+   - 2x+ performance improvement?
+3. Can you complete: "This skill powers up Claude by: [SPECIFIC CAPABILITY]"?
+
+Apply scoring: executable code (HIGH), embedded data (HIGH), domain patterns (HIGH),
+generic documentation (LOW), templates Claude can generate (LOW), vague capability (LOW).
+
+SKILL REQUIREMENTS:
+${JSON.stringify(requirements, null, 2)}
+
+Output your analysis as JSON with these exact fields:
+{
+  "utility_score": 0-10,
+  "utility_category": "HIGH_UTILITY|MEDIUM_UTILITY|LOW_UTILITY",
+  "power_up_statement": "This skill powers up Claude by: [specific and testable capability]",
+  "reasoning": "Why this scores as high/medium/low",
+  "research_direction": "What to focus on if proceeding",
+  "rejection_reason": "Why rejected (only if LOW_UTILITY)",
+  "recommended_redesigns": ["Alternative 1", "Alternative 2", "Alternative 3"],
+  "domain": "detected domain",
+  "phase_routing": "PROCEED|REDESIGN|REJECT"
+}
+
+ROUTING RULES:
+- Score 7-10: "PROCEED" (HIGH_UTILITY)
+- Score 4-6: "REDESIGN" (MEDIUM_UTILITY) - suggest 2-3 alternatives
+- Score 0-3: "REJECT" (LOW_UTILITY) - suggest 2-3 alternatives
+
+Return ONLY the JSON object, no other text.`;
+
+      try {
+        let response = await callClaude(prompt, 1500);
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const analysis = JSON.parse(response);
+
+        // Validate response structure
+        if (!analysis.utility_score || !analysis.utility_category || !analysis.phase_routing) {
+          throw new Error('Invalid analysis structure received');
+        }
+
+        addLog(`Utility score: ${analysis.utility_score}/10 (${analysis.utility_category})`,
+               analysis.utility_score >= 7 ? 'success' : analysis.utility_score >= 4 ? 'warning' : 'error');
+        addLog(`Power-up: ${analysis.power_up_statement}`, 'info');
+        updateProgress('Utility Analysis', 100, `Analysis complete: ${analysis.phase_routing}`);
+
+        return analysis;
+      } catch (err) {
+        throw new Error(`Utility analysis failed: ${err.message}`);
+      }
+    }
+
+    let utilityAnalysisResult = null;
+    let currentRequirements = null;
+
+    function showUtilityResults(analysis) {
+      document.getElementById('utilityCard').classList.remove('hidden');
+      document.getElementById('utilityScoreDisplay').textContent = `${analysis.utility_score}/10`;
+      document.getElementById('utilityCategoryDisplay').textContent = analysis.utility_category.replace('_', ' ');
+      document.getElementById('powerUpStatement').textContent = analysis.power_up_statement;
+      document.getElementById('utilityReasoning').textContent = analysis.reasoning;
+
+      // Hide all routing sections first
+      document.getElementById('utilityProceedSection').classList.add('hidden');
+      document.getElementById('utilityRedesignSection').classList.add('hidden');
+      document.getElementById('utilityRejectSection').classList.add('hidden');
+
+      // Show appropriate section based on routing
+      if (analysis.phase_routing === 'PROCEED') {
+        document.getElementById('utilityProceedSection').classList.remove('hidden');
+        document.getElementById('researchDirection').textContent = analysis.research_direction;
+      } else if (analysis.phase_routing === 'REDESIGN') {
+        document.getElementById('utilityRedesignSection').classList.remove('hidden');
+        const redesignContainer = document.getElementById('redesignOptions');
+        redesignContainer.innerHTML = '';
+
+        if (analysis.recommended_redesigns && analysis.recommended_redesigns.length > 0) {
+          analysis.recommended_redesigns.forEach((redesign, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'example-btn';
+            btn.textContent = `→ ${redesign}`;
+            btn.style.marginBottom = '12px';
+            btn.onclick = () => selectRedesign(redesign);
+            redesignContainer.appendChild(btn);
+          });
+        }
+      } else if (analysis.phase_routing === 'REJECT') {
+        document.getElementById('utilityRejectSection').classList.remove('hidden');
+        document.getElementById('rejectionReason').textContent = analysis.rejection_reason || analysis.reasoning;
+
+        const alternativesContainer = document.getElementById('rejectAlternatives');
+        alternativesContainer.innerHTML = '';
+
+        if (analysis.recommended_redesigns && analysis.recommended_redesigns.length > 0) {
+          analysis.recommended_redesigns.forEach((alternative, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'example-btn';
+            btn.textContent = `→ ${alternative}`;
+            btn.style.marginBottom = '12px';
+            btn.onclick = () => selectRedesign(alternative);
+            alternativesContainer.appendChild(btn);
+          });
+        }
+      }
+
+      // Color code the score display
+      const scoreDisplay = document.getElementById('utilityScoreDisplay');
+      if (analysis.utility_score >= 7) {
+        scoreDisplay.style.color = 'var(--accent-secondary)';
+      } else if (analysis.utility_score >= 4) {
+        scoreDisplay.style.color = '#fdd663';
+      } else {
+        scoreDisplay.style.color = '#f8b4ae';
+      }
+    }
+
+    function selectRedesign(redesign) {
+      document.getElementById('skillInput').value = redesign;
+      resetFactory();
+    }
+
+    async function continueToResearch() {
+      if (!currentRequirements || !utilityAnalysisResult) {
+        addLog('Missing requirements or utility analysis', 'error');
+        return;
+      }
+
+      if (isGenerating) {
+        addLog('Generation already in progress', 'warning');
+        return;
+      }
+
+      try {
+        isGenerating = true;
+        document.getElementById('utilityCard').classList.add('hidden');
+        document.getElementById('progressCard').classList.remove('hidden');
+
+        setStep(3); // Research phase (now step 3 instead of 2)
+        const research = await conductResearch(currentRequirements);
+
+        setStep(4); // Generate phase (now step 4 instead of 3)
+        const metadata = await generateMetadata(currentRequirements, research);
+        const documentation = await generateDocumentation(currentRequirements, research, metadata);
+
+        const skillPackage = { metadata, documentation, requirements: currentRequirements };
+
+        setStep(5); // Validate phase (now step 5 instead of 4)
+        const validation = await validateGeneration(skillPackage);
+
+        if (validation.issues.length > 0) {
+          throw new Error(`Validation failed: ${validation.issues.join(', ')}`);
+        }
+
+        setStep(6); // Package phase (now step 6 instead of 5)
+        const pkg = await packageSkill(skillPackage, currentRequirements.skill_name);
+
+        generatedSkillData = {
+          package: pkg.content,
+          filename: pkg.filename,
+          tree: pkg.tree,
+          validation
+        };
+
+        showResults(validation, pkg.tree, pkg.filename);
+        addLog('🎉 Skill generation complete!', 'success');
+
+      } catch (err) {
+        showError(err.message);
+        addLog(`Generation failed: ${err.message}`, 'error');
+      } finally {
+        isGenerating = false;
+      }
+    }
+
+    function proceedAnyway() {
+      addLog('Proceeding with MEDIUM_UTILITY skill...', 'warning');
+      continueToResearch();
     }
 
     async function conductResearch(requirements) {
@@ -1578,38 +1845,23 @@ This skill will be automatically loaded by Claude Code when relevant.
         document.getElementById('progressCard').classList.remove('hidden');
         document.getElementById('logContainer').innerHTML = '';
 
+        // Phase 1: Extract Requirements
         setStep(1);
-
         const requirements = await extractRequirements(input);
+        currentRequirements = requirements;
 
+        // Phase 0: Utility Analysis (runs after extraction)
         setStep(2);
-        const research = await conductResearch(requirements);
+        const utilityAnalysis = await analyzeUtility(requirements);
+        utilityAnalysisResult = utilityAnalysis;
 
-        setStep(3);
-        const metadata = await generateMetadata(requirements, research);
-        const documentation = await generateDocumentation(requirements, research, metadata);
+        // Hide progress card and show utility results
+        document.getElementById('progressCard').classList.add('hidden');
+        showUtilityResults(utilityAnalysis);
 
-        const skillPackage = { metadata, documentation, requirements };
-
-        setStep(4);
-        const validation = await validateGeneration(skillPackage);
-
-        if (validation.issues.length > 0) {
-          throw new Error(`Validation failed: ${validation.issues.join(', ')}`);
-        }
-
-        setStep(5);
-        const pkg = await packageSkill(skillPackage, requirements.skill_name);
-
-        generatedSkillData = {
-          package: pkg.content,
-          filename: pkg.filename,
-          tree: pkg.tree,
-          validation
-        };
-
-        showResults(validation, pkg.tree, pkg.filename);
-        addLog('🎉 Skill generation complete!', 'success');
+        // For HIGH_UTILITY, we could auto-proceed or wait for user
+        // Currently waiting for user to click "Continue to Research"
+        // REDESIGN and REJECT paths stop here and wait for user action
 
       } catch (err) {
         showError(err.message);
