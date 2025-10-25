@@ -780,6 +780,85 @@
       background: rgba(251, 188, 5, 0.08);
       border: 1px solid rgba(251, 188, 5, 0.2);
       border-radius: 12px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .api-config.collapsed {
+      background: rgba(129, 201, 149, 0.08);
+      border-color: rgba(129, 201, 149, 0.3);
+      padding: 16px 20px;
+    }
+
+    .api-config-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .api-config-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .api-config-status .check-icon {
+      color: var(--accent-secondary);
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .api-config-status .status-text {
+      color: var(--accent-secondary);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .api-config-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .api-config-btn {
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid;
+      background: rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .api-config-btn.edit {
+      color: var(--accent-primary);
+      border-color: rgba(138, 180, 248, 0.3);
+    }
+
+    .api-config-btn.edit:hover {
+      background: rgba(138, 180, 248, 0.1);
+      border-color: var(--accent-primary);
+    }
+
+    .api-config-btn.clear {
+      color: #f8b4ae;
+      border-color: rgba(242, 139, 130, 0.3);
+    }
+
+    .api-config-btn.clear:hover {
+      background: rgba(242, 139, 130, 0.1);
+      border-color: rgba(242, 139, 130, 0.5);
+    }
+
+    .api-config-form {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .api-config-form.hidden {
+      display: none;
     }
 
     .api-config input {
@@ -805,7 +884,7 @@
   <div class="container">
     <div class="aviram-surface header-surface">
       <h1>🏭 Deep Research Skill Factory</h1>
-      <p class="subtitle">COGNITIVE INFRASTRUCTURE • INTELLIGENCE-FIRST INTERFACES</p>
+      <p class="subtitle">SKILL FACTORY • TURN WORKFLOWS INTO CLAUDE SUPERPOWERS</p>
     </div>
 
     <div class="aviram-surface">
@@ -815,16 +894,32 @@
     <div class="grid">
       <div>
         <div class="aviram-surface" id="inputCard">
-          <div class="api-config">
-            <h3>⚙️ API Configuration</h3>
-            <p style="font-size: 13px; margin-bottom: 8px;">Enter your Anthropic API key to enable skill generation:</p>
-            <input
-              type="password"
-              id="apiKey"
-              placeholder="sk-ant-..."
-              autocomplete="off"
-            />
-            <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">Your key is stored locally in browser memory only. Get one at console.anthropic.com</p>
+          <div class="api-config" id="apiConfig">
+            <!-- Collapsed State (shown when API key is saved) -->
+            <div class="api-config-header hidden" id="apiConfigCollapsed">
+              <div class="api-config-status">
+                <span class="check-icon">✓</span>
+                <span class="status-text">API Key Configured</span>
+              </div>
+              <div class="api-config-actions">
+                <button class="api-config-btn edit" onclick="expandApiConfig()">Edit</button>
+                <button class="api-config-btn clear" onclick="clearApiKey()">Clear</button>
+              </div>
+            </div>
+
+            <!-- Expanded State (shown on first visit or when editing) -->
+            <div class="api-config-form" id="apiConfigForm">
+              <h3>⚙️ API Configuration</h3>
+              <p style="font-size: 13px; margin-bottom: 8px;">Enter your Anthropic API key to enable skill generation:</p>
+              <input
+                type="password"
+                id="apiKey"
+                placeholder="sk-ant-..."
+                autocomplete="off"
+                onchange="saveApiKey()"
+              />
+              <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">Your key is stored locally in your browser only. Get one at console.anthropic.com</p>
+            </div>
           </div>
 
           <h2>What do you want Claude to know how to do?</h2>
@@ -937,10 +1032,62 @@ The more texture you give, the sharper the output. But even 'email automation' i
     let isGenerating = false;
 
     const steps = ['Input', 'Research', 'Generate', 'Validate', 'Package'];
+    const API_KEY_STORAGE_KEY = 'anthropic_api_key';
+
+    // API Key localStorage Management
+    function loadApiKey() {
+      const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+      if (savedKey) {
+        document.getElementById('apiKey').value = savedKey;
+        collapseApiConfig();
+      }
+    }
+
+    function saveApiKey() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      if (apiKey) {
+        localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+        collapseApiConfig();
+        addLog('API key saved locally', 'success');
+      }
+    }
+
+    function collapseApiConfig() {
+      const apiConfig = document.getElementById('apiConfig');
+      const collapsedView = document.getElementById('apiConfigCollapsed');
+      const formView = document.getElementById('apiConfigForm');
+
+      apiConfig.classList.add('collapsed');
+      collapsedView.classList.remove('hidden');
+      formView.classList.add('hidden');
+    }
+
+    function expandApiConfig() {
+      const apiConfig = document.getElementById('apiConfig');
+      const collapsedView = document.getElementById('apiConfigCollapsed');
+      const formView = document.getElementById('apiConfigForm');
+
+      apiConfig.classList.remove('collapsed');
+      collapsedView.classList.add('hidden');
+      formView.classList.remove('hidden');
+
+      // Focus the input field
+      document.getElementById('apiKey').focus();
+    }
+
+    function clearApiKey() {
+      if (confirm('Are you sure you want to clear your saved API key?')) {
+        localStorage.removeItem(API_KEY_STORAGE_KEY);
+        document.getElementById('apiKey').value = '';
+        expandApiConfig();
+        addLog('API key cleared', 'info');
+      }
+    }
 
     function init() {
       initAviramContext();
       renderStepper();
+      loadApiKey();
     }
 
     function renderStepper() {
@@ -1458,11 +1605,18 @@ ${skillContent}
 
 When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
 
-        // Copy to clipboard
+        // Try modern clipboard API first
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(prompt);
-          showCopySuccess();
-          addLog('Skill prompt copied to clipboard!', 'success');
+          try {
+            await navigator.clipboard.writeText(prompt);
+            showCopySuccess();
+            addLog('Skill prompt copied to clipboard!', 'success');
+          } catch (clipboardError) {
+            // Clipboard API exists but rejected (Safari, insecure origin, permission denied)
+            // Fall back to legacy method
+            console.warn('Clipboard API rejected, using fallback:', clipboardError);
+            showCopyFallback(prompt);
+          }
         } else {
           // Fallback for browsers without clipboard API
           showCopyFallback(prompt);
