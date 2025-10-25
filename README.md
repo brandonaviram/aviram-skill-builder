@@ -66,6 +66,10 @@ Each skill package includes:
 - Quality scoring (metadata validity, documentation depth, completeness)
 - Safe character handling (prevents YAML injection, escapes special chars)
 - Naming conventions (lowercase-hyphenated, max 64 chars)
+- **Constraint validation** (reality checks to prevent overselling Claude's capabilities)
+- **Red flag detection** (identifies promises of real-time data, external integrations, etc.)
+
+See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) for detailed validation guidelines.
 
 ## Examples
 
@@ -92,10 +96,12 @@ Create REST API clients with token refresh, exponential backoff, request dedupli
 
 ## Security Notes
 
-- API keys stored in browser memory only (cleared on page refresh)
+- API keys stored in browser localStorage (persists across sessions)
+- Keys never leave your browser except for direct Anthropic API calls
 - No server-side code - everything runs client-side
 - No tracking, no analytics, no data collection
 - YAML sanitization prevents injection attacks
+- User bears all API costs directly
 
 ## Architecture
 
@@ -146,8 +152,10 @@ This is a static HTML file - no development server needed. Just edit `index.html
 
 ## Roadmap
 
+- [x] Local storage for API key persistence
+- [x] Validation framework with constraint checking
 - [ ] Support for multi-file skills (scripts, templates, references)
-- [ ] Local storage for API key persistence (with encryption)
+- [ ] API key encryption in localStorage
 - [ ] Template library for common skill patterns
 - [ ] Skill versioning and update system
 - [ ] Export to GitHub Gist

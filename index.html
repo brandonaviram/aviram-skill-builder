@@ -917,6 +917,7 @@
                 placeholder="sk-ant-..."
                 autocomplete="off"
                 onchange="saveApiKey()"
+                onkeypress="if(event.key === 'Enter') saveApiKey()"
               />
               <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">Your key is stored locally in your browser only. Get one at console.anthropic.com</p>
             </div>
@@ -1333,13 +1334,28 @@ CRITICAL YAML RULES:
 3. Description must include BOTH what it does AND when to use it
 4. Return ONLY valid JSON with these exact fields (no YAML, no markdown):
 
+REALITY CONSTRAINTS - NEVER promise these capabilities:
+- Real-time data access (prices, inventory, weather) without API key requirement
+- Authenticated API calls on user's behalf
+- Direct database operations
+- Live integrations with external services
+- Async/background processing or task queues
+
+WHAT CLAUDE CAN DO:
+- Create frameworks, templates, and decision trees
+- Generate code examples and architectural patterns
+- Analyze and synthesize information
+- Provide recommendations based on training data
+- Structure workflows and processes
+
 {
   "name": "lowercase-hyphenated-name",
-  "description": "Clear description with what and when. Include trigger keywords.",
+  "description": "What Claude actually does (not aspirational). When to use it (realistic triggers). Mention constraints if external tools needed.",
   "metadata": {
     "version": "1.0.0",
     "complexity": "simple",
-    "author": "Skill Factory"
+    "author": "Skill Factory",
+    "constraints": "List any limitations like 'Cannot access real-time data' or 'Requires user to provide API key'"
   }
 }
 
@@ -1382,27 +1398,39 @@ REQUIREMENTS: ${JSON.stringify(requirements)}
 METADATA: ${metadata}
 RESEARCH: ${research}
 
+CRITICAL - REALITY-BASED DOCUMENTATION:
+- Focus on what Claude can ACTUALLY do (frameworks, analysis, code examples)
+- If external tools/APIs needed, explicitly state where user must defer
+- Never promise real-time data, live integrations, or authenticated API calls
+- Include a "Limitations" section if the skill has constraints
+- Be honest about what requires user action vs Claude's capabilities
+
 Structure:
 # Overview
-Brief description
+Brief description of what this skill actually does (not aspirational)
 
 # When to Use
-Trigger conditions and keywords
+Realistic trigger conditions and keywords
 
 # Key Features
-- Feature 1
-- Feature 2
+- Feature 1 (what Claude provides)
+- Feature 2 (realistic capabilities)
+
+# Limitations (if any)
+- What this skill cannot do
+- When to use external tools instead
+- Required user actions for complete workflows
 
 # Usage Examples
-Concrete examples with code
+Concrete examples with code showing realistic scenarios
 
 # Implementation Details
-Technical approach
+Technical approach within Claude's capabilities
 
 # Best Practices
-Recommendations and tips
+Recommendations and tips for using this skill effectively
 
-Keep under 500 lines. Be specific and practical.`;
+Keep under 500 lines. Be specific, practical, and honest about constraints.`;
 
       try {
         const docs = await callClaude(prompt, 4000);
@@ -1416,7 +1444,7 @@ Keep under 500 lines. Be specific and practical.`;
 
     async function validateGeneration(skillPackage) {
       addLog('Running validation...', 'info');
-      updateProgress('Validate', 50, 'Validating metadata...');
+      updateProgress('Validate', 30, 'Validating metadata...');
 
       const validation = {
         yamlValid: false,
@@ -1436,12 +1464,41 @@ Keep under 500 lines. Be specific and practical.`;
         addLog('YAML validation failed', 'error');
       }
 
+      // Constraint validation - check for overselling
+      updateProgress('Validate', 60, 'Checking constraint compliance...');
+      const fullContent = skillPackage.metadata + '\n' + skillPackage.documentation;
+      const redFlags = [
+        { pattern: /real-?time (data|price|inventory|api|integration)/i, issue: 'Promises real-time data without mentioning constraints' },
+        { pattern: /integrates? with|connects? to|fetches? from/i, issue: 'Suggests direct external integrations' },
+        { pattern: /database|sql|query|mongodb|postgres/i, issue: 'Implies database access' },
+        { pattern: /async|background (process|task|job)|queue/i, issue: 'Suggests async/background processing' },
+        { pattern: /authenticate|login|oauth|token refresh/i, issue: 'Implies authentication handling for user' }
+      ];
+
+      for (const flag of redFlags) {
+        if (flag.pattern.test(fullContent)) {
+          // Check if constraints are mentioned nearby
+          const constraintMentioned = /constraint|limitation|cannot|requires user|defer|hand off/i.test(fullContent);
+          if (!constraintMentioned) {
+            validation.warnings.push(flag.issue);
+            addLog(`Warning: ${flag.issue}`, 'warning');
+          }
+        }
+      }
+
+      // Quality scoring
       let score = 0;
-      if (validation.yamlValid) score += 40;
-      if (skillPackage.documentation.length > 500) score += 30;
-      if (validation.issues.length === 0) score += 30;
+      if (validation.yamlValid) score += 30;
+      if (skillPackage.documentation.length > 500) score += 20;
+      if (validation.issues.length === 0) score += 20;
+      if (validation.warnings.length === 0) score += 20; // Bonus for no overselling
+      if (skillPackage.metadata.includes('constraints:')) score += 10; // Bonus for explicit constraints
 
       validation.qualityScore = score;
+
+      if (validation.warnings.length > 0) {
+        addLog(`Found ${validation.warnings.length} potential overselling warnings`, 'warning');
+      }
 
       addLog(`Quality score: ${score}/100`, score >= 70 ? 'success' : 'warning');
       updateProgress('Validate', 100, 'Validation complete');
