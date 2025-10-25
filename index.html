@@ -973,6 +973,9 @@ The more texture you give, the sharper the output. But even 'email automation' i
               <p id="utilityReasoning" style="color: var(--text-secondary); line-height: 1.7;"></p>
             </div>
 
+            <!-- Constraint Validation Report -->
+            <div id="constraintValidationReport" class="hidden"></div>
+
             <div id="utilityProceedSection" class="hidden">
               <div class="status-badge success">
                 ✓ HIGH UTILITY - Proceeding to Research
@@ -1522,12 +1525,480 @@ Return ONLY the JSON object, no markdown, no other text.`;
       }
     }
 
+    // ========== CONSTRAINT VALIDATION GATE ==========
+    // Prevents false power-up claims that contradict skill's own constraints
+
+    function extractYAMLConstraints(text) {
+      /**
+       * Extract constraints from YAML frontmatter (primary source)
+       * Looks for metadata.constraints field in YAML section
+       */
+      const constraints = [];
+
+      try {
+        // Find YAML frontmatter (between --- delimiters)
+        const yamlMatch = text.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (!yamlMatch) {
+          return constraints; // No YAML frontmatter found
+        }
+
+        const yamlText = yamlMatch[1];
+
+        // Simple YAML parsing for constraints field
+        // Look for "constraints:" or "  constraints:" (nested in metadata)
+        const constraintsMatch = yamlText.match(/^\s*constraints:\s*["']?(.*?)["']?\s*$/m);
+        if (constraintsMatch) {
+          // Found top-level constraints
+          const constraintStr = constraintsMatch[1].trim();
+          // Split by period or newline
+          const splitConstraints = constraintStr.split(/[.]\s*/).filter(c => c.trim());
+          constraints.push(...splitConstraints.map(c => c.trim()));
+        }
+
+        // Also check for nested metadata.constraints
+        const metadataSection = yamlText.match(/metadata:\s*\n([\s\S]*?)(?=\n\S|\n---|\n$)/);
+        if (metadataSection) {
+          const metadataText = metadataSection[1];
+          const metadataConstraintsMatch = metadataText.match(/^\s*constraints:\s*["']?(.*?)["']?\s*$/m);
+          if (metadataConstraintsMatch) {
+            const constraintStr = metadataConstraintsMatch[1].trim();
+            const splitConstraints = constraintStr.split(/[.]\s*/).filter(c => c.trim());
+            constraints.push(...splitConstraints.map(c => c.trim()));
+          }
+        }
+      } catch (err) {
+        // If YAML parsing fails, return empty and fall back to text extraction
+        console.warn('YAML constraint extraction failed:', err);
+      }
+
+      return constraints;
+    }
+
+    function extractTextConstraints(description) {
+      /**
+       * Extract constraint statements from text (secondary source)
+       * Looks for constraint keywords in description body
+       */
+      const constraintKeywords = [
+        'Cannot',
+        'cannot',
+        'Cannot access',
+        'Cannot perform',
+        'No access to',
+        'Does not',
+        'Cannot provide',
+        'Limited to',
+        'Restricted',
+        'No real-time',
+        'Users must',
+        'User must',
+        'Requires user to',
+        'Not available',
+        'Unable to',
+        'No live',
+        'Not capable'
+      ];
+
+      const constraints = [];
+      const lines = description.split(/[.!?\n]/);
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Skip YAML frontmatter lines
+        if (trimmed === '---') continue;
+        if (trimmed.includes(':') && trimmed.split(':')[0].match(/^\s*[a-z_]+$/)) {
+          // Likely a YAML field, skip
+          continue;
+        }
+
+        for (const keyword of constraintKeywords) {
+          if (trimmed.includes(keyword)) {
+            // Clean up markdown formatting
+            let cleaned = trimmed.replace(/^[*\-]\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+            cleaned = cleaned.trim();
+            if (cleaned && cleaned.length > 10) { // Avoid single words
+              constraints.push(cleaned);
+              break; // Don't add same line multiple times
+            }
+          }
+        }
+      }
+
+      return constraints;
+    }
+
+    function extractConstraints(description) {
+      /**
+       * Extract ALL constraints from YAML metadata + description text
+       * Returns array of constraint strings
+       */
+      const constraints = [];
+
+      // Priority 1: YAML metadata constraints (most reliable)
+      const yamlConstraints = extractYAMLConstraints(description);
+      constraints.push(...yamlConstraints);
+
+      // Priority 2: Text-based constraints (supplementary)
+      const textConstraints = extractTextConstraints(description);
+
+      // Deduplicate - avoid repeating similar constraints
+      for (const textConstraint of textConstraints) {
+        const textLower = textConstraint.toLowerCase();
+        const isDuplicate = constraints.some(existing => {
+          const existingLower = existing.toLowerCase();
+          // Check for substantial overlap
+          return existingLower.includes(textLower) || textLower.includes(existingLower);
+        });
+
+        if (!isDuplicate) {
+          constraints.push(textConstraint);
+        }
+      }
+
+      return constraints;
+    }
+
+    function extractPowerUpClaims(powerUpStatement) {
+      /**
+       * Extract specific capability claims from power-up statement
+       * Returns array of claimed capabilities
+       */
+      const claims = [];
+      const statement = powerUpStatement.toLowerCase();
+
+      // Common claim markers
+      const markers = [
+        'providing',
+        'enables',
+        'powers up',
+        'generates',
+        'creates',
+        'executes',
+        'performs',
+        'offers',
+        'delivers',
+        'gives',
+        'adds'
+      ];
+
+      // Extract phrases after markers
+      for (const marker of markers) {
+        const regex = new RegExp(marker + '\\s+([^,;.]+)', 'gi');
+        const matches = statement.matchAll(regex);
+
+        for (const match of matches) {
+          if (match[1]) {
+            claims.push(match[1].trim());
+          }
+        }
+      }
+
+      // Also look for capability keywords directly
+      const capabilityKeywords = [
+        'web scraping',
+        'data extraction',
+        'real-time',
+        'live data',
+        'api calls',
+        'database access',
+        'authentication',
+        'automated',
+        'executable',
+        'integration'
+      ];
+
+      for (const keyword of capabilityKeywords) {
+        if (statement.includes(keyword)) {
+          claims.push(keyword);
+        }
+      }
+
+      return [...new Set(claims)]; // Remove duplicates
+    }
+
+    function validateConstraints(requirements, utilityAnalysis) {
+      /**
+       * Main constraint validation function
+       * Checks if power-up claims contradict skill's own constraints
+       * Returns validation report with revised score if needed
+       */
+      const description = requirements.description;
+      const powerUpStatement = utilityAnalysis.power_up_statement;
+
+      // Step 1: Extract constraints
+      const constraints = extractConstraints(description);
+
+      if (constraints.length === 0) {
+        // No constraints found, analysis is valid as-is
+        return {
+          hasConstraints: false,
+          hasContradictions: false,
+          originalAnalysis: utilityAnalysis
+        };
+      }
+
+      // Step 2: Extract power-up claims
+      const claims = extractPowerUpClaims(powerUpStatement);
+
+      if (claims.length === 0) {
+        // No specific claims found, analysis is valid as-is
+        return {
+          hasConstraints: true,
+          constraints: constraints,
+          hasContradictions: false,
+          originalAnalysis: utilityAnalysis
+        };
+      }
+
+      // Step 3: Check for contradictions
+      const contradictions = [];
+      const validClaims = [];
+
+      for (const claim of claims) {
+        let isContradicted = false;
+        let conflictingConstraint = null;
+
+        for (const constraint of constraints) {
+          if (detectContradiction(claim, constraint)) {
+            isContradicted = true;
+            conflictingConstraint = constraint;
+            contradictions.push({
+              claim: claim,
+              constraint: conflictingConstraint,
+              reason: 'Claim contradicts explicit constraint'
+            });
+            break;
+          }
+        }
+
+        if (!isContradicted) {
+          validClaims.push(claim);
+        }
+      }
+
+      // Step 4: If no contradictions, return original analysis
+      if (contradictions.length === 0) {
+        return {
+          hasConstraints: true,
+          constraints: constraints,
+          claimsChecked: claims.length,
+          hasContradictions: false,
+          originalAnalysis: utilityAnalysis
+        };
+      }
+
+      // Step 5: Contradictions found - recalculate score
+      const validClaimsRatio = validClaims.length / claims.length;
+      const originalScore = utilityAnalysis.utility_score;
+      const newScore = recalculateUtilityScore(
+        originalScore,
+        contradictions.length,
+        validClaimsRatio
+      );
+
+      // Step 6: Rebuild power-up statement
+      const revisedPowerUp = validClaims.length > 0
+        ? `This skill powers up Claude by: ${validClaims.join(', ')}`
+        : '⚠️ No valid power-up statement (claims contradicted by constraints)';
+
+      // Step 7: Update category based on new score
+      const revisedCategory = categorizeUtilityScore(newScore);
+
+      // Step 8: Update phase routing based on new score
+      const revisedRouting = newScore >= 7 ? 'PROCEED'
+        : newScore >= 4 ? 'REDESIGN'
+        : 'REJECT';
+
+      // Step 9: Build revised analysis
+      const revisedAnalysis = {
+        ...utilityAnalysis,
+        utility_score: newScore,
+        utility_category: revisedCategory,
+        power_up_statement: revisedPowerUp,
+        phase_routing: revisedRouting,
+        reasoning: utilityAnalysis.reasoning +
+          `\n\n⚠️ CONSTRAINT VALIDATION ADJUSTMENT: Original score ${originalScore}/10 reduced to ${newScore}/10. ` +
+          `${contradictions.length} power-up claim(s) contradicted by skill's own constraints.`
+      };
+
+      return {
+        hasConstraints: true,
+        constraints: constraints,
+        claimsChecked: claims.length,
+        hasContradictions: true,
+        contradictions: contradictions,
+        validClaims: validClaims,
+        originalScore: originalScore,
+        revisedScore: newScore,
+        scoreChange: newScore - originalScore,
+        validClaimsRatio: validClaimsRatio,
+        originalAnalysis: utilityAnalysis,
+        revisedAnalysis: revisedAnalysis
+      };
+    }
+
+    function detectContradiction(claim, constraint) {
+      /**
+       * Check if a claim contradicts a constraint
+       * Returns true if contradiction detected
+       *
+       * IMPORTANT: Only explicit prohibitions (cannot, no access, etc.) are contradictions.
+       * Requirements like "users must provide API key" are NOT contradictions - they indicate
+       * the capability exists but needs user input.
+       */
+      const claimLower = claim.toLowerCase();
+      const constraintLower = constraint.toLowerCase();
+
+      // Contradiction patterns - ONLY explicit prohibitions
+      const contradictionMap = {
+        'web scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform', 'no access to'],
+        'scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform', 'no access to'],
+        'data extraction': ['cannot extract', 'cannot access', 'no extraction', 'no access to'],
+        'extraction': ['cannot extract', 'cannot access', 'no extraction', 'no access to'],
+        'real-time': ['cannot real-time', 'no real-time', 'cannot access live', 'not real-time', 'no access to'],
+        'live data': ['cannot access', 'no live', 'cannot real-time', 'no access to'],
+        'live': ['cannot access', 'no live', 'cannot real-time', 'no access to'],
+        'api calls': ['cannot call', 'no api', 'cannot access', 'no access to'],
+        'api': ['cannot call', 'no api', 'cannot access', 'no access to'],
+        'authentication': ['cannot authenticate', 'no auth', 'cannot access', 'no access to'],
+        'database': ['cannot access', 'no database', 'no access to'],
+        'automated': ['cannot automate', 'no automation'],
+        'executable': ['cannot execute', 'no execution'],
+        'integration': ['cannot integrate', 'no integration', 'no access to']
+      };
+
+      // Check if claim matches any contradiction pattern
+      for (const [keyword, blockPatterns] of Object.entries(contradictionMap)) {
+        if (claimLower.includes(keyword)) {
+          for (const pattern of blockPatterns) {
+            if (constraintLower.includes(pattern)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      // Additional word-overlap check - ONLY for explicit prohibitions
+      const claimWords = new Set(claimLower.split(/\s+/).filter(w => w.length > 3));
+      const constraintWords = constraintLower.split(/\s+/).filter(w => w.length > 3);
+
+      // If constraint says "cannot X" or "no access to X" and claim includes "X", it's a contradiction
+      if (constraintLower.includes('cannot') || constraintLower.includes('no access')) {
+        for (const word of claimWords) {
+          if (constraintWords.includes(word)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    function recalculateUtilityScore(originalScore, contradictionCount, validClaimsRatio) {
+      /**
+       * Recalculate utility score based on constraint contradictions
+       * Each contradiction = -2 points
+       * If <50% of claims are valid = -4 additional points
+       */
+      let penalty = contradictionCount * 2;
+
+      if (validClaimsRatio < 0.5) {
+        penalty += 4;
+      }
+
+      const newScore = Math.max(0, originalScore - penalty);
+      return newScore;
+    }
+
+    function categorizeUtilityScore(score) {
+      /**
+       * Convert numeric score to category
+       */
+      if (score >= 7) return 'HIGH_UTILITY';
+      if (score >= 4) return 'MEDIUM_UTILITY';
+      return 'LOW_UTILITY';
+    }
+
     let utilityAnalysisResult = null;
     let currentRequirements = null;
     let problemAnalysisResult = null;
 
-    async function showUtilityResults(analysis) {
+    async function showUtilityResults(analysis, validationResult = null) {
       document.getElementById('utilityCard').classList.remove('hidden');
+
+      // Display constraint validation report if there were contradictions
+      const validationContainer = document.getElementById('constraintValidationReport');
+      if (validationResult && validationResult.hasContradictions) {
+        let validationHTML = `
+          <div style="background: rgba(248, 180, 174, 0.08); border: 1px solid rgba(248, 180, 174, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #f8b4ae; margin-bottom: 16px;">🛑 CONSTRAINT CONTRADICTIONS DETECTED</h3>
+
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; gap: 20px; margin-bottom: 12px;">
+                <div>
+                  <strong style="color: var(--text-secondary);">Original Score:</strong>
+                  <span style="color: var(--text-primary); font-size: 18px; margin-left: 8px;">${validationResult.originalScore}/10</span>
+                </div>
+                <div>
+                  <strong style="color: var(--text-secondary);">Revised Score:</strong>
+                  <span style="color: #f8b4ae; font-size: 18px; margin-left: 8px;">${validationResult.revisedScore}/10</span>
+                  <span style="color: #f8b4ae; margin-left: 4px;">⬇️ ${validationResult.scoreChange}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <strong style="color: var(--text-primary);">Contradicted Claims:</strong>
+              <div style="margin-top: 8px;">`;
+
+        validationResult.contradictions.forEach(c => {
+          validationHTML += `
+                <div style="background: rgba(0, 0, 0, 0.2); border-left: 3px solid #f8b4ae; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
+                  <div style="color: var(--text-primary); margin-bottom: 4px;">
+                    <span style="color: #f8b4ae;">✗</span> "${c.claim}"
+                  </div>
+                  <div style="color: var(--text-secondary); font-size: 13px; margin-left: 20px;">
+                    Conflicts with: "${c.constraint}"
+                  </div>
+                </div>`;
+        });
+
+        validationHTML += `
+              </div>
+            </div>`;
+
+        if (validationResult.validClaims && validationResult.validClaims.length > 0) {
+          validationHTML += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+              <strong style="color: var(--text-primary);">Valid Claims Remaining:</strong>
+              <div style="margin-top: 8px; color: var(--text-secondary); font-size: 14px;">
+                ${validationResult.validClaims.join(', ')}
+              </div>
+            </div>`;
+        } else {
+          validationHTML += `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: #f8b4ae;">
+              ⚠️ No valid power-up claims remain after constraint validation
+            </div>`;
+        }
+
+        validationHTML += `
+            <div style="margin-top: 16px; padding: 12px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; font-size: 13px; color: var(--text-secondary);">
+              <strong>Routing:</strong> ${validationResult.scoreChange <= -3 ? 'Score dropped significantly - REDESIGN RECOMMENDED' : 'Proceeding with revised score'}
+            </div>
+          </div>
+        `;
+
+        if (validationContainer) {
+          validationContainer.innerHTML = validationHTML;
+          validationContainer.classList.remove('hidden');
+        }
+      } else if (validationContainer) {
+        validationContainer.classList.add('hidden');
+      }
+
       document.getElementById('utilityScoreDisplay').textContent = `${analysis.utility_score}/10`;
       document.getElementById('utilityCategoryDisplay').textContent = analysis.utility_category.replace('_', ' ');
       document.getElementById('powerUpStatement').textContent = analysis.power_up_statement;
@@ -2072,11 +2543,44 @@ This skill will be automatically loaded by Claude Code when relevant.
         // Phase 0: Utility Analysis (runs after extraction)
         setStep(2);
         const utilityAnalysis = await analyzeUtility(requirements);
-        utilityAnalysisResult = utilityAnalysis;
+
+        // NEW: Constraint Validation Gate
+        // Validates that power-up claims don't contradict skill's own constraints
+        addLog('Running constraint validation...', 'info');
+        const validationResult = validateConstraints(requirements, utilityAnalysis);
+
+        let finalAnalysis = utilityAnalysis;
+        if (validationResult.hasContradictions) {
+          // Log found constraints
+          addLog(`✓ Found ${validationResult.constraints.length} constraint(s):`, 'info');
+          validationResult.constraints.forEach(c => {
+            addLog(`  - "${c.substring(0, 80)}${c.length > 80 ? '...' : ''}"`, 'info');
+          });
+
+          // Log contradictions
+          addLog(`⚠️ Constraint contradictions detected: ${validationResult.contradictions.length} claim(s) invalidated`, 'warning');
+          validationResult.contradictions.forEach(contradiction => {
+            addLog(`  ✗ Claim: "${contradiction.claim}"`, 'warning');
+            addLog(`    Conflicts: "${contradiction.constraint.substring(0, 60)}${contradiction.constraint.length > 60 ? '...' : ''}"`, 'warning');
+          });
+
+          addLog(`Score recalculated: ${validationResult.originalScore}/10 → ${validationResult.revisedScore}/10 (${validationResult.scoreChange})`, 'warning');
+          finalAnalysis = validationResult.revisedAnalysis;
+        } else if (validationResult.hasConstraints) {
+          addLog(`✓ Found ${validationResult.constraints.length} constraint(s) - all claims validated`, 'success');
+          validationResult.constraints.forEach(c => {
+            addLog(`  - "${c.substring(0, 80)}${c.length > 80 ? '...' : ''}"`, 'info');
+          });
+          addLog(`✓ Constraint validation passed: ${validationResult.claimsChecked || 0} claim(s) verified`, 'success');
+        } else {
+          addLog('✓ No constraints found - analysis valid', 'success');
+        }
+
+        utilityAnalysisResult = finalAnalysis;
 
         // Hide progress card and show utility results
         document.getElementById('progressCard').classList.add('hidden');
-        await showUtilityResults(utilityAnalysis);
+        await showUtilityResults(finalAnalysis, validationResult);
 
         // For HIGH_UTILITY, we could auto-proceed or wait for user
         // Currently waiting for user to click "Continue to Research"
