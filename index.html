@@ -1404,10 +1404,129 @@ Return ONLY the JSON object, no other text.`;
       }
     }
 
+    async function analyzeProblem(requirements, utilityAnalysis) {
+      addLog('Identifying real practitioner problems...', 'info');
+      updateProgress('Problem Analysis', 30, 'Researching domain pain points...');
+
+      const prompt = `You are the Problem Identifier Agent. Your job is to research what
+practitioners in a given domain actually struggle with, then suggest
+skill redesigns grounded in those real problems.
+
+Given a skill request, answer:
+
+1. PRACTITIONER PAIN POINTS
+   - What do people in this domain struggle with? (Be specific, not generic)
+   - What's their current workaround? (How do they solve it today?)
+   - What does this problem cost them? (Time, money, errors)
+   - How often do they face this? (Daily, per project, rare?)
+   - Example: Not "budgeting is hard" but "predicting multi-location
+     shoot costs with labor conflicts takes 8+ hours per production"
+
+2. CLAUDE CAPABILITY GAP
+   - What specifically can't Claude do well? (Not "general advice")
+   - What would Claude need to do this? (Be concrete)
+   - Example: "Claude can discuss budgeting but cannot model
+     constraint satisfaction with location-specific dependencies"
+
+3. VALUE UNLOCK
+   - What would solving this unlock? (Measurable outcome)
+   - How much time/money would it save? (Be specific)
+   - What becomes possible? (New capability)
+   - Example: "Generating accurate cost predictions in minutes vs.
+     8+ hours, preventing 5-15% budget overruns"
+
+Then suggest 2-3 redesigns where each:
+- Targets ONE specific practitioner pain point
+- States what Claude can't do that's needed
+- Shows why it would be HIGH_UTILITY
+- Includes measurable outcome
+- Describes specific implementation (what data in → what out)
+
+Focus on PROBLEMS, not generic technical additions.
+
+SKILL REQUIREMENTS:
+${JSON.stringify(requirements, null, 2)}
+
+CURRENT UTILITY ANALYSIS:
+Score: ${utilityAnalysis.utility_score}/10
+Category: ${utilityAnalysis.utility_category}
+Domain: ${utilityAnalysis.domain}
+Power-up: ${utilityAnalysis.power_up_statement}
+
+Return JSON with this exact structure:
+{
+  "domain_research": {
+    "practitioner_pain_points": [
+      {
+        "problem": "Specific problem practitioners face",
+        "why_hard": "What makes this challenging",
+        "current_workaround": "How they solve it now",
+        "cost_of_problem": "Time/money/errors cost",
+        "frequency": "How often this occurs"
+      }
+    ],
+    "claude_capability_gap": "What Claude specifically cannot do well for this domain",
+    "value_unlock": "What would be unlocked by solving this"
+  },
+  "redesign_suggestions": [
+    {
+      "original_skill": "${requirements.skill_name}",
+      "redesigned_skill": "new-skill-name with specific capability",
+      "problem_it_solves": "Specific practitioner pain point addressed",
+      "claude_power_up": "Specific capability this adds to Claude",
+      "estimated_utility_score": 7-9,
+      "why_higher_utility": "Why this scores higher than original",
+      "measurable_outcome": "Concrete, measurable result",
+      "specific_implementation": "What data goes in → what comes out"
+    }
+  ]
+}
+
+Return ONLY the JSON object, no markdown, no other text.`;
+
+      try {
+        let response = await callClaude(prompt, 2500);
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const problemAnalysis = JSON.parse(response);
+
+        addLog('Problem analysis complete', 'success');
+        updateProgress('Problem Analysis', 100, 'Problem-grounded redesigns identified');
+
+        return problemAnalysis;
+      } catch (err) {
+        addLog('Problem analysis failed - using fallback', 'warning');
+        // Return a basic structure if analysis fails
+        return {
+          domain_research: {
+            practitioner_pain_points: [{
+              problem: "Generic workflow inefficiency",
+              why_hard: "Manual process",
+              current_workaround: "Manual work",
+              cost_of_problem: "Time consuming",
+              frequency: "Regular"
+            }],
+            claude_capability_gap: "Needs more specific capabilities",
+            value_unlock: "Improved efficiency"
+          },
+          redesign_suggestions: utilityAnalysis.recommended_redesigns.map(r => ({
+            original_skill: requirements.skill_name,
+            redesigned_skill: r,
+            problem_it_solves: "Addresses domain-specific challenges",
+            claude_power_up: "Enhanced capabilities for this domain",
+            estimated_utility_score: 7,
+            why_higher_utility: "More focused on solving specific problems",
+            measurable_outcome: "Improved workflow efficiency",
+            specific_implementation: "Framework-based approach"
+          }))
+        };
+      }
+    }
+
     let utilityAnalysisResult = null;
     let currentRequirements = null;
+    let problemAnalysisResult = null;
 
-    function showUtilityResults(analysis) {
+    async function showUtilityResults(analysis) {
       document.getElementById('utilityCard').classList.remove('hidden');
       document.getElementById('utilityScoreDisplay').textContent = `${analysis.utility_score}/10`;
       document.getElementById('utilityCategoryDisplay').textContent = analysis.utility_category.replace('_', ' ');
@@ -1423,37 +1542,30 @@ Return ONLY the JSON object, no other text.`;
       if (analysis.phase_routing === 'PROCEED') {
         document.getElementById('utilityProceedSection').classList.remove('hidden');
         document.getElementById('researchDirection').textContent = analysis.research_direction;
-      } else if (analysis.phase_routing === 'REDESIGN') {
-        document.getElementById('utilityRedesignSection').classList.remove('hidden');
-        const redesignContainer = document.getElementById('redesignOptions');
-        redesignContainer.innerHTML = '';
+      } else if (analysis.phase_routing === 'REDESIGN' || analysis.phase_routing === 'REJECT') {
+        // For MEDIUM and LOW utility, run Problem Identifier Agent
+        addLog('Deploying Problem Identifier Agent...', 'info');
 
-        if (analysis.recommended_redesigns && analysis.recommended_redesigns.length > 0) {
-          analysis.recommended_redesigns.forEach((redesign, index) => {
-            const btn = document.createElement('button');
-            btn.className = 'example-btn';
-            btn.textContent = `→ ${redesign}`;
-            btn.style.marginBottom = '12px';
-            btn.onclick = () => selectRedesign(redesign);
-            redesignContainer.appendChild(btn);
-          });
-        }
-      } else if (analysis.phase_routing === 'REJECT') {
-        document.getElementById('utilityRejectSection').classList.remove('hidden');
-        document.getElementById('rejectionReason').textContent = analysis.rejection_reason || analysis.reasoning;
+        // Show loading state
+        const targetSection = analysis.phase_routing === 'REDESIGN' ?
+                             'utilityRedesignSection' : 'utilityRejectSection';
+        document.getElementById(targetSection).classList.remove('hidden');
+        const containerDiv = analysis.phase_routing === 'REDESIGN' ?
+                            document.getElementById('redesignOptions') :
+                            document.getElementById('rejectAlternatives');
+        containerDiv.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">Analyzing real problems in this domain...<span class="loading-spinner"></span></p>';
 
-        const alternativesContainer = document.getElementById('rejectAlternatives');
-        alternativesContainer.innerHTML = '';
+        try {
+          // Run problem analysis
+          const problemAnalysis = await analyzeProblem(currentRequirements, analysis);
+          problemAnalysisResult = problemAnalysis;
 
-        if (analysis.recommended_redesigns && analysis.recommended_redesigns.length > 0) {
-          analysis.recommended_redesigns.forEach((alternative, index) => {
-            const btn = document.createElement('button');
-            btn.className = 'example-btn';
-            btn.textContent = `→ ${alternative}`;
-            btn.style.marginBottom = '12px';
-            btn.onclick = () => selectRedesign(alternative);
-            alternativesContainer.appendChild(btn);
-          });
+          // Display problem-grounded results
+          displayProblemAnalysis(problemAnalysis, analysis);
+        } catch (err) {
+          addLog('Problem analysis encountered an error, showing basic redesigns', 'warning');
+          // Fallback to basic redesigns
+          displayBasicRedesigns(analysis);
         }
       }
 
@@ -1465,6 +1577,113 @@ Return ONLY the JSON object, no other text.`;
         scoreDisplay.style.color = '#fdd663';
       } else {
         scoreDisplay.style.color = '#f8b4ae';
+      }
+    }
+
+    function displayProblemAnalysis(problemAnalysis, utilityAnalysis) {
+      const isRedesign = utilityAnalysis.phase_routing === 'REDESIGN';
+      const containerDiv = isRedesign ?
+                          document.getElementById('redesignOptions') :
+                          document.getElementById('rejectAlternatives');
+
+      const research = problemAnalysis.domain_research;
+
+      let html = `
+        <div style="background: rgba(138, 180, 248, 0.08); border: 1px solid rgba(138, 180, 248, 0.2); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: var(--accent-primary); margin-bottom: 16px;">⚠️ Real Problem Identified</h3>
+      `;
+
+      // Display pain points
+      if (research.practitioner_pain_points && research.practitioner_pain_points.length > 0) {
+        const painPoint = research.practitioner_pain_points[0];
+        html += `
+          <div style="margin-bottom: 16px;">
+            <strong style="color: var(--text-primary);">Problem:</strong>
+            <p style="margin: 8px 0; line-height: 1.6;">${painPoint.problem}</p>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; font-size: 13px;">
+            <div>
+              <strong style="color: var(--text-secondary);">Current Workaround:</strong>
+              <p style="margin: 4px 0;">${painPoint.current_workaround}</p>
+            </div>
+            <div>
+              <strong style="color: var(--text-secondary);">Cost:</strong>
+              <p style="margin: 4px 0;">${painPoint.cost_of_problem}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      html += `
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            <strong style="color: var(--text-primary);">Claude Capability Gap:</strong>
+            <p style="margin: 8px 0; line-height: 1.6; color: var(--text-secondary);">${research.claude_capability_gap}</p>
+          </div>
+          <div style="margin-top: 12px;">
+            <strong style="color: var(--text-primary);">Value Unlock:</strong>
+            <p style="margin: 8px 0; line-height: 1.6; color: var(--accent-secondary);">${research.value_unlock}</p>
+          </div>
+        </div>
+      `;
+
+      // Display redesign suggestions
+      html += '<h3 style="margin: 24px 0 16px 0;">Problem-Grounded Redesigns</h3>';
+
+      if (problemAnalysis.redesign_suggestions && problemAnalysis.redesign_suggestions.length > 0) {
+        problemAnalysis.redesign_suggestions.forEach((suggestion, index) => {
+          const scoreColor = suggestion.estimated_utility_score >= 8 ? 'var(--accent-secondary)' : '#fdd663';
+          html += `
+            <div style="background: rgba(30, 33, 39, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 16px; cursor: pointer; transition: all 0.3s ease;"
+                 onmouseover="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(138, 180, 248, 0.08)';"
+                 onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.background='rgba(30, 33, 39, 0.6)';"
+                 onclick='selectRedesign("${suggestion.redesigned_skill.replace(/"/g, '&quot;')}")'>
+              <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                <h4 style="color: var(--accent-primary); margin: 0; font-size: 16px; flex: 1;">${suggestion.redesigned_skill}</h4>
+                <div style="background: ${scoreColor}20; border: 1px solid ${scoreColor}; border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: ${scoreColor};">
+                  ${suggestion.estimated_utility_score}/10 ⬆️
+                </div>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <strong style="color: var(--text-secondary); font-size: 13px;">Solves:</strong>
+                <p style="margin: 4px 0; font-size: 14px; line-height: 1.6;">${suggestion.problem_it_solves}</p>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <strong style="color: var(--text-secondary); font-size: 13px;">Power-up:</strong>
+                <p style="margin: 4px 0; font-size: 14px; line-height: 1.6; color: var(--accent-primary);">${suggestion.claude_power_up}</p>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <strong style="color: var(--text-secondary); font-size: 13px;">Outcome:</strong>
+                <p style="margin: 4px 0; font-size: 14px; line-height: 1.6;">${suggestion.measurable_outcome}</p>
+              </div>
+              <div style="background: rgba(10, 11, 13, 0.4); border-radius: 8px; padding: 12px; margin-top: 12px;">
+                <strong style="color: var(--text-secondary); font-size: 12px;">Implementation:</strong>
+                <p style="margin: 4px 0; font-size: 13px; font-family: 'SF Mono', monospace; line-height: 1.5;">${suggestion.specific_implementation}</p>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      containerDiv.innerHTML = html;
+    }
+
+    function displayBasicRedesigns(analysis) {
+      const isRedesign = analysis.phase_routing === 'REDESIGN';
+      const containerDiv = isRedesign ?
+                          document.getElementById('redesignOptions') :
+                          document.getElementById('rejectAlternatives');
+
+      containerDiv.innerHTML = '';
+
+      if (analysis.recommended_redesigns && analysis.recommended_redesigns.length > 0) {
+        analysis.recommended_redesigns.forEach((redesign, index) => {
+          const btn = document.createElement('button');
+          btn.className = 'example-btn';
+          btn.textContent = `→ ${redesign}`;
+          btn.style.marginBottom = '12px';
+          btn.onclick = () => selectRedesign(redesign);
+          containerDiv.appendChild(btn);
+        });
       }
     }
 
@@ -1857,7 +2076,7 @@ This skill will be automatically loaded by Claude Code when relevant.
 
         // Hide progress card and show utility results
         document.getElementById('progressCard').classList.add('hidden');
-        showUtilityResults(utilityAnalysis);
+        await showUtilityResults(utilityAnalysis);
 
         // For HIGH_UTILITY, we could auto-proceed or wait for user
         // Currently waiting for user to click "Continue to Research"
