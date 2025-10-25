@@ -1310,7 +1310,9 @@ The more texture you give, the sharper the output. But even 'email automation' i
       addLog('Analyzing input and extracting requirements...', 'info');
       updateProgress('Input Processing', 10, 'Parsing requirements...');
 
-      const prompt = `Extract skill requirements from this input as JSON:
+      const prompt = `Extract skill requirements AND categorize this skill request.
+
+CRITICAL: The category determines if this is a real power-up for Claude or just code templates.
 
 INPUT: ${input}
 
@@ -1323,15 +1325,73 @@ Return ONLY valid JSON (no markdown):
   "required_apis": ["api1", "api2"],
   "key_features": ["feature1", "feature2"],
   "needs_scripts": true|false,
-  "needs_references": false
-}`;
+  "needs_references": false,
+  "category": "TEMPLATE|METHODOLOGY|KNOWLEDGE|PROCESSOR|EXECUTOR",
+  "category_reasoning": "why this category fits",
+  "is_real_powerup": true|false
+}
+
+SKILL CATEGORIES:
+
+TEMPLATE: Gives Claude better code/templates to recommend
+  Examples: "web scraping framework", "API client generator", "React component templates"
+  Max utility: 3/10 (not really a power-up)
+  Claude executes: No (generates code for humans to run)
+  Real power-up: No
+  Test: Does Claude execute this? No → TEMPLATE
+
+METHODOLOGY: Gives Claude new reasoning framework
+  Examples: "research methodology", "contradiction detector", "source evaluation"
+  Max utility: 9/10 (real power-up)
+  Claude executes: Yes (applies reasoning framework)
+  Real power-up: Yes
+  Test: Does Claude apply this in reasoning? Yes → METHODOLOGY
+
+KNOWLEDGE: Embeds domain knowledge Claude can apply
+  Examples: "constraint solving patterns", "CSS grid layout rules", "algorithm library"
+  Max utility: 9/10 (real power-up)
+  Claude executes: Yes (applies knowledge in reasoning)
+  Real power-up: Yes
+  Test: Does Claude use this knowledge directly? Yes → KNOWLEDGE
+
+PROCESSOR: Gives Claude processing/analysis capability
+  Examples: "query optimizer", "contradiction detector", "image annotation processor"
+  Max utility: 9/10 (real power-up)
+  Claude executes: Yes (processes data with algorithms)
+  Real power-up: Yes
+  Test: Does Claude execute the logic? Yes → PROCESSOR
+
+EXECUTOR: Requires external execution (not a real power-up)
+  Examples: "database migration runner", "deployment automation", "CI/CD pipeline"
+  Max utility: 2/10 (not a power-up)
+  Claude executes: No (needs humans to run scripts/tools)
+  Real power-up: No
+  Test: Does this need external execution? Yes → EXECUTOR
+
+CRITICAL TEST: "Can Claude execute/apply this during reasoning without humans running code?"
+- If NO → TEMPLATE or EXECUTOR (low utility)
+- If YES → METHODOLOGY, KNOWLEDGE, or PROCESSOR (high utility)`;
 
       try {
-        let response = await callClaude(prompt);
+        let response = await callClaude(prompt, 1200);
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const extracted = JSON.parse(response);
 
-        addLog(`Extracted skill: ${extracted.skill_name}`, 'success');
+        // Log category information
+        const categoryEmoji = {
+          'TEMPLATE': '📄',
+          'METHODOLOGY': '🧠',
+          'KNOWLEDGE': '📚',
+          'PROCESSOR': '⚙️',
+          'EXECUTOR': '🔧'
+        };
+
+        addLog(`Skill: ${extracted.skill_name}`, 'success');
+        addLog(`Category: ${categoryEmoji[extracted.category] || '❓'} ${extracted.category} (${extracted.is_real_powerup ? 'Real power-up' : 'Not a power-up'})`, 'info');
+        if (extracted.category_reasoning) {
+          addLog(`Reasoning: ${extracted.category_reasoning}`, 'info');
+        }
+
         updateProgress('Input Processing', 100, 'Requirements extracted');
         return extracted;
       } catch (err) {
