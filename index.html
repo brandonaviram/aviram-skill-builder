@@ -917,6 +917,7 @@
                 placeholder="sk-ant-..."
                 autocomplete="off"
                 onchange="saveApiKey()"
+                onkeypress="if(event.key === 'Enter') saveApiKey()"
               />
               <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">Your key is stored locally in your browser only. Get one at console.anthropic.com</p>
             </div>
