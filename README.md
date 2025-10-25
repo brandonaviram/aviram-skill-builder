@@ -48,10 +48,15 @@ A beautiful, single-file web application that transforms rough ideas into produc
 ### 5-Stage Generation Pipeline
 
 1. **Input Processing**: Extracts requirements, determines complexity, identifies key features
-2. **Research**: Conducts focused research on best practices, APIs, and implementation patterns
-3. **Generate**: Creates YAML metadata and comprehensive documentation
-4. **Validate**: Ensures YAML compliance, checks quality score, validates structure
-5. **Package**: Bundles everything into a properly formatted ZIP with README
+2. **Phase 0 - Utility Analysis**:
+   - Evaluates if skill genuinely powers up Claude
+   - **Constraint Validation Gate**: Validates power-up claims against skill's own constraints
+   - Prevents false HIGH_UTILITY scores for contradictory capabilities
+   - Routes to Research (HIGH), Redesign (MEDIUM), or Rejection (LOW)
+3. **Research**: Conducts focused research on best practices, APIs, and implementation patterns
+4. **Generate**: Creates YAML metadata and comprehensive documentation
+5. **Validate**: Ensures YAML compliance, checks quality score, validates structure
+6. **Package**: Bundles everything into a properly formatted ZIP with README
 
 ### What Gets Generated
 
@@ -66,10 +71,14 @@ Each skill package includes:
 - Quality scoring (metadata validity, documentation depth, completeness)
 - Safe character handling (prevents YAML injection, escapes special chars)
 - Naming conventions (lowercase-hyphenated, max 64 chars)
-- **Constraint validation** (reality checks to prevent overselling Claude's capabilities)
+- **Constraint Validation Gate** (Phase 0):
+  - Extracts constraints from skill description (e.g., "Cannot access live data")
+  - Validates power-up claims don't contradict constraints
+  - Recalculates utility score when contradictions detected
+  - Prevents false HIGH_UTILITY scores for documentation-only skills
 - **Red flag detection** (identifies promises of real-time data, external integrations, etc.)
 
-See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) for detailed validation guidelines.
+See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) and [CONSTRAINT_VALIDATION_TESTING.md](CONSTRAINT_VALIDATION_TESTING.md) for detailed validation guidelines.
 
 ## Examples
 
