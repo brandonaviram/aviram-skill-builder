@@ -35,6 +35,27 @@ Outcome: CORRECT (contradictions detected, score adjusted)
 - `extractConstraints()` - Orchestrates both + deduplication
 - Enhanced logging shows constraint sources and detection details
 
+### Bug Fix: "Users Must" False Positives (P1)
+
+**Problem:** The contradiction detector treated "users must" as a blocking pattern, causing false positives.
+
+**Example False Positive:**
+```yaml
+metadata:
+  constraints: "Users must provide their own API key for authentication"
+
+Power-up claim: "provides API integration capabilities"
+```
+**Wrong Result:** CONTRADICTION ❌ (skill was penalized incorrectly)
+
+**Fix:** Removed "users must" and "requires user" from contradiction blocking patterns. These are *requirements* (skill can do X if user provides Y), not *prohibitions* (skill cannot do X).
+
+**Correct Logic:**
+- **Prohibition** (blocks capability): "Cannot access", "No API", "No database"
+- **Requirement** (capability exists, needs input): "Users must provide API key", "Requires user to run script"
+
+After fix, only explicit prohibitions trigger contradictions.
+
 ## What Was Implemented
 
 ### New Functions (Lines 1531-1920)
@@ -247,7 +268,66 @@ Routing: Score dropped significantly - REDESIGN RECOMMENDED
 
 ---
 
-### Test 2: React iOS HIG (Should Pass)
+### Test 2: API Integration Skill (Users Must Provide Key - Should Pass)
+
+**Input (with user requirement, not prohibition):**
+```yaml
+---
+name: api-integration-helper
+description: "API integration helper"
+metadata:
+  constraints: "Users must provide their own API keys. Requires user to configure authentication."
+---
+
+Helps integrate with external APIs by generating request templates and handling
+authentication flows.
+```
+
+**Expected Behavior:**
+
+**Initial Utility Analysis:**
+- Score: 7/10 (HIGH_UTILITY)
+- Power-up: "This skill powers up Claude by: providing API integration capabilities, generating authentication flows"
+
+**Constraint Validation (After Fix):**
+- Constraints found: 2
+  1. "Users must provide their own API keys"
+  2. "Requires user to configure authentication"
+- Claims checked: 2
+  1. "API integration capabilities" → VALID (not blocked by "users must provide")
+  2. "authentication flows" → VALID (not blocked by "requires user to")
+- Valid claims: 2/2 (100%)
+- **No contradictions detected** ✅
+
+**Revised Analysis:**
+- Score: 7/10 (unchanged)
+- Category: HIGH_UTILITY
+- Routing: PROCEED
+
+**Expected Logs:**
+```
+[INFO] Running constraint validation...
+[INFO] ✓ Found 2 constraint(s) - all claims validated
+[INFO]   - "Users must provide their own API keys"
+[INFO]   - "Requires user to configure authentication"
+[SUCCESS] ✓ Constraint validation passed: 2 claim(s) verified
+```
+
+**Verification:**
+- [x] "Users must" not treated as blocking pattern
+- [x] "Requires user to" not treated as blocking pattern
+- [x] Score remains 7/10 (no false positive penalty)
+- [x] Routing stays PROCEED
+- [x] No contradiction warnings in logs
+
+**Why This Passes:**
+- "Users must provide API keys" = **REQUIREMENT** (skill CAN do API calls, needs user's key)
+- "Cannot access APIs" = **PROHIBITION** (skill CANNOT do API calls at all)
+- Only prohibitions trigger contradictions
+
+---
+
+### Test 3: React iOS HIG (Should Pass)
 
 **Input:**
 ```

@@ -1843,26 +1843,30 @@ Return ONLY the JSON object, no markdown, no other text.`;
       /**
        * Check if a claim contradicts a constraint
        * Returns true if contradiction detected
+       *
+       * IMPORTANT: Only explicit prohibitions (cannot, no access, etc.) are contradictions.
+       * Requirements like "users must provide API key" are NOT contradictions - they indicate
+       * the capability exists but needs user input.
        */
       const claimLower = claim.toLowerCase();
       const constraintLower = constraint.toLowerCase();
 
-      // Contradiction patterns
+      // Contradiction patterns - ONLY explicit prohibitions
       const contradictionMap = {
-        'web scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform'],
-        'scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform'],
-        'data extraction': ['cannot extract', 'cannot access', 'no extraction', 'users must'],
-        'extraction': ['cannot extract', 'cannot access', 'users must'],
-        'real-time': ['cannot real-time', 'no real-time', 'cannot access live', 'not real-time'],
+        'web scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform', 'no access to'],
+        'scraping': ['cannot scrape', 'cannot access', 'no scraping', 'cannot perform', 'no access to'],
+        'data extraction': ['cannot extract', 'cannot access', 'no extraction', 'no access to'],
+        'extraction': ['cannot extract', 'cannot access', 'no extraction', 'no access to'],
+        'real-time': ['cannot real-time', 'no real-time', 'cannot access live', 'not real-time', 'no access to'],
         'live data': ['cannot access', 'no live', 'cannot real-time', 'no access to'],
-        'live': ['cannot access', 'no live', 'cannot real-time', 'users must'],
-        'api calls': ['cannot call', 'no api', 'cannot access', 'users must'],
-        'api': ['cannot call', 'no api', 'users must', 'cannot access'],
-        'authentication': ['cannot authenticate', 'no auth', 'cannot access', 'users must'],
-        'database': ['cannot access', 'no database', 'users must'],
-        'automated': ['cannot automate', 'users must', 'requires user'],
-        'executable': ['cannot execute', 'users must', 'requires user'],
-        'integration': ['cannot integrate', 'no integration', 'users must']
+        'live': ['cannot access', 'no live', 'cannot real-time', 'no access to'],
+        'api calls': ['cannot call', 'no api', 'cannot access', 'no access to'],
+        'api': ['cannot call', 'no api', 'cannot access', 'no access to'],
+        'authentication': ['cannot authenticate', 'no auth', 'cannot access', 'no access to'],
+        'database': ['cannot access', 'no database', 'no access to'],
+        'automated': ['cannot automate', 'no automation'],
+        'executable': ['cannot execute', 'no execution'],
+        'integration': ['cannot integrate', 'no integration', 'no access to']
       };
 
       // Check if claim matches any contradiction pattern
@@ -1876,11 +1880,11 @@ Return ONLY the JSON object, no markdown, no other text.`;
         }
       }
 
-      // Additional word-overlap check
+      // Additional word-overlap check - ONLY for explicit prohibitions
       const claimWords = new Set(claimLower.split(/\s+/).filter(w => w.length > 3));
       const constraintWords = constraintLower.split(/\s+/).filter(w => w.length > 3);
 
-      // If constraint says "cannot X" and claim includes "X", it's a contradiction
+      // If constraint says "cannot X" or "no access to X" and claim includes "X", it's a contradiction
       if (constraintLower.includes('cannot') || constraintLower.includes('no access')) {
         for (const word of claimWords) {
           if (constraintWords.includes(word)) {
