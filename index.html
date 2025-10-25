@@ -370,6 +370,45 @@
         0 0 40px rgba(129, 201, 149, 0.2);
     }
 
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .button-group .btn {
+      flex: 1;
+      min-width: 200px;
+      margin-top: 0;
+    }
+
+    .btn-secondary {
+      background: rgba(100, 100, 120, 0.2);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: var(--text-primary);
+      box-shadow: 0 4px 20px rgba(100, 100, 120, 0.2);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(100, 100, 120, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow:
+        0 8px 32px rgba(100, 100, 120, 0.3),
+        0 0 40px rgba(100, 100, 120, 0.2);
+    }
+
+    @media (max-width: 768px) {
+      .button-group {
+        flex-direction: column;
+      }
+
+      .button-group .btn {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
     .progress-bar {
       width: 100%;
       height: 6px;
@@ -837,9 +876,14 @@ The more texture you give, the sharper the output. But even 'email automation' i
             </div>
             <p id="qualityScore" style="margin: 12px 0;"></p>
 
-            <button class="btn success" id="downloadBtn" onclick="downloadSkill()">
-              ⬇️ Download Skill Package
-            </button>
+            <div class="button-group">
+              <button class="btn success" id="downloadBtn" onclick="downloadSkill()">
+                ⬇️ Download Skill Package
+              </button>
+              <button class="btn btn-secondary" id="copyPromptBtn" onclick="copyPromptToClipboard()">
+                📋 Copy Prompt
+              </button>
+            </div>
 
             <div id="fileTree" class="file-tree"></div>
           </div>
@@ -1386,6 +1430,95 @@ This skill will be automatically loaded by Claude Code when relevant.
       URL.revokeObjectURL(url);
 
       addLog(`Downloaded ${generatedSkillData.filename}`, 'success');
+    }
+
+    async function copyPromptToClipboard() {
+      if (!generatedSkillData || !generatedSkillData.package) {
+        addLog('No skill available to copy', 'error');
+        return;
+      }
+
+      try {
+        // Extract SKILL.md content from the ZIP
+        const zip = await JSZip.loadAsync(generatedSkillData.package);
+        const skillMdFile = Object.keys(zip.files).find(f => f.endsWith('SKILL.md'));
+
+        if (!skillMdFile) {
+          throw new Error('SKILL.md not found in package');
+        }
+
+        const skillContent = await zip.files[skillMdFile].async('text');
+
+        // Format as a prompt
+        const prompt = `You are now equipped with the following skill:
+
+---
+${skillContent}
+---
+
+When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
+
+        // Copy to clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(prompt);
+          showCopySuccess();
+          addLog('Skill prompt copied to clipboard!', 'success');
+        } else {
+          // Fallback for browsers without clipboard API
+          showCopyFallback(prompt);
+        }
+
+      } catch (error) {
+        addLog(`Failed to copy: ${error.message}`, 'error');
+        console.error('Copy error:', error);
+      }
+    }
+
+    function showCopySuccess() {
+      const button = document.getElementById('copyPromptBtn');
+      const originalText = button.innerHTML;
+      button.innerHTML = '✓ Copied!';
+      button.disabled = true;
+
+      setTimeout(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+      }, 2000);
+    }
+
+    function showCopyFallback(text) {
+      // Create a temporary textarea for fallback copying
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '0';
+      textarea.style.width = '2em';
+      textarea.style.height = '2em';
+      textarea.style.padding = '0';
+      textarea.style.border = 'none';
+      textarea.style.outline = 'none';
+      textarea.style.boxShadow = 'none';
+      textarea.style.background = 'transparent';
+
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showCopySuccess();
+          addLog('Skill prompt copied to clipboard!', 'success');
+        } else {
+          throw new Error('Copy command failed');
+        }
+      } catch (err) {
+        addLog('Please copy the text manually (Ctrl/Cmd+C)', 'warning');
+        alert('Automatic copy failed. Please press Ctrl/Cmd+C to copy the selected text.');
+      } finally {
+        document.body.removeChild(textarea);
+      }
     }
 
     function resetFactory() {
