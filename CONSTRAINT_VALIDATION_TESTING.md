@@ -3,14 +3,60 @@
 ## Overview
 The Constraint Validation Gate prevents Phase 0 from scoring skills highly when their power-up claims contradict their own constraints. This document provides test scenarios to validate the implementation.
 
+## Bug Fix: YAML Constraint Extraction
+
+### The Problem
+Initial implementation only searched description text for constraints, missing the primary source: YAML metadata fields.
+
+**Original Bug:**
+```
+Input: Skill with metadata.constraints: "Cannot access live data"
+Result: "✓ No constraints found - analysis valid"
+Outcome: FALSE POSITIVE (8/10 score when should be 2/10)
+```
+
+### The Fix
+Updated `extractConstraints()` to use multi-source extraction:
+
+1. **Primary Source**: Parse YAML frontmatter for `constraints:` field (top-level or nested in metadata)
+2. **Secondary Source**: Search description text for constraint keywords
+3. **Combine & Deduplicate**: Merge constraints from both sources
+
+**After Fix:**
+```
+Input: Skill with metadata.constraints: "Cannot access live data"
+Result: "✓ Found 1 constraint(s): Cannot access live data"
+Outcome: CORRECT (contradictions detected, score adjusted)
+```
+
+### Implementation Details
+- `extractYAMLConstraints()` - Parses YAML frontmatter using regex
+- `extractTextConstraints()` - Searches text for constraint keywords
+- `extractConstraints()` - Orchestrates both + deduplication
+- Enhanced logging shows constraint sources and detection details
+
 ## What Was Implemented
 
-### New Functions (Lines 1525-1824)
+### New Functions (Lines 1531-1920)
 
-1. **`extractConstraints(description)`** - Lines 1528-1567
-   - Extracts constraint statements from skill description
+1. **`extractYAMLConstraints(text)`** - Lines 1531-1575
+   - **PRIMARY SOURCE**: Extracts constraints from YAML frontmatter
+   - Parses YAML metadata for `constraints:` field (top-level or nested in metadata)
+   - Handles both quoted and unquoted constraint strings
+   - Returns array of constraint strings from YAML
+
+2. **`extractTextConstraints(description)`** - Lines 1577-1630
+   - **SECONDARY SOURCE**: Extracts constraints from description text
    - Looks for keywords: "Cannot", "No access to", "Users must", "Requires user", etc.
-   - Returns array of constraint strings
+   - Cleans markdown formatting
+   - Returns array of constraint strings from text
+
+3. **`extractConstraints(description)`** - Lines 1632-1661
+   - **MAIN ORCHESTRATOR**: Combines YAML and text constraint extraction
+   - Calls extractYAMLConstraints() first (primary source)
+   - Calls extractTextConstraints() second (supplementary)
+   - Deduplicates constraints across sources
+   - Returns complete array of all constraints found
 
 2. **`extractPowerUpClaims(powerUpStatement)`** - Lines 1569-1625
    - Extracts claimed capabilities from power-up statement
@@ -108,17 +154,19 @@ If contradictions found:
 
 ## Test Scenarios
 
-### Test 1: Web Research Analyst (Bug from Ticket)
+### Test 1: Web Research Analyst (Original Bug - Now Fixed)
 
-**Input:**
-```
+**Input (with YAML metadata):**
+```yaml
+---
+name: web-research-analyst
+description: "Web research analyst skill"
+metadata:
+  constraints: "Cannot access live web data or perform real-time scraping. Users must execute API calls independently."
+---
+
 Web research analyst skill that provides executable web scraping, automated
 data extraction, and real-time research capabilities.
-
-Constraints:
-- Cannot access live web data or perform real-time scraping
-- Users must execute API calls and data collection independently
-- Cannot perform live web scraping
 ```
 
 **Expected Behavior:**
@@ -127,12 +175,16 @@ Constraints:
 - Score: 8/10 (HIGH_UTILITY)
 - Power-up: "This skill powers up Claude by: providing executable web scraping, automated data extraction, and real-time research capabilities"
 
-**Constraint Validation:**
-- Constraints found: 3
+**Constraint Validation (FIXED - Now extracts YAML constraints):**
+- **YAML constraints found**: 2
+  1. "Cannot access live web data or perform real-time scraping"
+  2. "Users must execute API calls independently"
+- **Text constraints found**: 0 (no additional text-based constraints)
+- **Total constraints**: 2
 - Claims checked: 3
-  1. "executable web scraping" → CONTRADICTED
-  2. "automated data extraction" → CONTRADICTED
-  3. "real-time research capabilities" → CONTRADICTED
+  1. "executable web scraping" → CONTRADICTED (by constraint #1)
+  2. "automated data extraction" → CONTRADICTED (by constraint #2)
+  3. "real-time research capabilities" → CONTRADICTED (by constraint #1)
 - Valid claims: 0/3 (0%)
 
 **Revised Analysis:**
@@ -143,6 +195,22 @@ Constraints:
 - Category: LOW_UTILITY
 - Power-up: "⚠️ No valid power-up statement (claims contradicted by constraints)"
 - Routing: REJECT → Triggers Problem Identifier
+
+**Expected Logs (After Fix):**
+```
+[INFO] Running constraint validation...
+[INFO] ✓ Found 2 constraint(s):
+[INFO]   - "Cannot access live web data or perform real-time scraping"
+[INFO]   - "Users must execute API calls independently"
+[WARNING] ⚠️ Constraint contradictions detected: 3 claim(s) invalidated
+[WARNING]   ✗ Claim: "executable web scraping"
+[WARNING]     Conflicts: "Cannot access live web data or perform real-time scr..."
+[WARNING]   ✗ Claim: "automated data extraction"
+[WARNING]     Conflicts: "Users must execute API calls independently"
+[WARNING]   ✗ Claim: "real-time research capabilities"
+[WARNING]     Conflicts: "Cannot access live web data or perform real-time scr..."
+[WARNING] Score recalculated: 8/10 → 0/10 (-8)
+```
 
 **Expected UI:**
 ```
@@ -159,7 +227,7 @@ Contradicted Claims:
     Conflicts with: "Users must execute API calls independently"
 
   ✗ "real-time research capabilities"
-    Conflicts with: "Cannot perform live web scraping"
+    Conflicts with: "Cannot access live web data or perform real-time scraping"
 
 ⚠️ No valid power-up claims remain after constraint validation
 
@@ -167,13 +235,15 @@ Routing: Score dropped significantly - REDESIGN RECOMMENDED
 ```
 
 **Verification:**
-- [ ] Score drops from 8/10 to 0/10
-- [ ] All 3 claims marked as contradicted
-- [ ] Power-up statement shows warning
-- [ ] Routing changes from PROCEED to REJECT
-- [ ] Problem Identifier Agent runs
-- [ ] Validation report displays in UI
-- [ ] Logs show constraint validation warnings
+- [x] YAML constraints extracted from metadata.constraints field
+- [x] Logs show all constraints found
+- [x] Score drops from 8/10 to 0/10
+- [x] All 3 claims marked as contradicted
+- [x] Power-up statement shows warning
+- [x] Routing changes from PROCEED to REJECT
+- [x] Problem Identifier Agent runs
+- [x] Validation report displays in UI
+- [x] Detailed logs show which constraints triggered contradictions
 
 ---
 

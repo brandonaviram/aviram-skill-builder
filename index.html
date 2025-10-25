@@ -1528,10 +1528,56 @@ Return ONLY the JSON object, no markdown, no other text.`;
     // ========== CONSTRAINT VALIDATION GATE ==========
     // Prevents false power-up claims that contradict skill's own constraints
 
-    function extractConstraints(description) {
+    function extractYAMLConstraints(text) {
       /**
-       * Extract constraint statements from skill description
-       * Returns array of constraint strings
+       * Extract constraints from YAML frontmatter (primary source)
+       * Looks for metadata.constraints field in YAML section
+       */
+      const constraints = [];
+
+      try {
+        // Find YAML frontmatter (between --- delimiters)
+        const yamlMatch = text.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (!yamlMatch) {
+          return constraints; // No YAML frontmatter found
+        }
+
+        const yamlText = yamlMatch[1];
+
+        // Simple YAML parsing for constraints field
+        // Look for "constraints:" or "  constraints:" (nested in metadata)
+        const constraintsMatch = yamlText.match(/^\s*constraints:\s*["']?(.*?)["']?\s*$/m);
+        if (constraintsMatch) {
+          // Found top-level constraints
+          const constraintStr = constraintsMatch[1].trim();
+          // Split by period or newline
+          const splitConstraints = constraintStr.split(/[.]\s*/).filter(c => c.trim());
+          constraints.push(...splitConstraints.map(c => c.trim()));
+        }
+
+        // Also check for nested metadata.constraints
+        const metadataSection = yamlText.match(/metadata:\s*\n([\s\S]*?)(?=\n\S|\n---|\n$)/);
+        if (metadataSection) {
+          const metadataText = metadataSection[1];
+          const metadataConstraintsMatch = metadataText.match(/^\s*constraints:\s*["']?(.*?)["']?\s*$/m);
+          if (metadataConstraintsMatch) {
+            const constraintStr = metadataConstraintsMatch[1].trim();
+            const splitConstraints = constraintStr.split(/[.]\s*/).filter(c => c.trim());
+            constraints.push(...splitConstraints.map(c => c.trim()));
+          }
+        }
+      } catch (err) {
+        // If YAML parsing fails, return empty and fall back to text extraction
+        console.warn('YAML constraint extraction failed:', err);
+      }
+
+      return constraints;
+    }
+
+    function extractTextConstraints(description) {
+      /**
+       * Extract constraint statements from text (secondary source)
+       * Looks for constraint keywords in description body
        */
       const constraintKeywords = [
         'Cannot',
@@ -1548,7 +1594,9 @@ Return ONLY the JSON object, no markdown, no other text.`;
         'User must',
         'Requires user to',
         'Not available',
-        'Unable to'
+        'Unable to',
+        'No live',
+        'Not capable'
       ];
 
       const constraints = [];
@@ -1558,11 +1606,54 @@ Return ONLY the JSON object, no markdown, no other text.`;
         const trimmed = line.trim();
         if (!trimmed) continue;
 
+        // Skip YAML frontmatter lines
+        if (trimmed === '---') continue;
+        if (trimmed.includes(':') && trimmed.split(':')[0].match(/^\s*[a-z_]+$/)) {
+          // Likely a YAML field, skip
+          continue;
+        }
+
         for (const keyword of constraintKeywords) {
           if (trimmed.includes(keyword)) {
-            constraints.push(trimmed);
-            break; // Don't add same line multiple times
+            // Clean up markdown formatting
+            let cleaned = trimmed.replace(/^[*\-]\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+            cleaned = cleaned.trim();
+            if (cleaned && cleaned.length > 10) { // Avoid single words
+              constraints.push(cleaned);
+              break; // Don't add same line multiple times
+            }
           }
+        }
+      }
+
+      return constraints;
+    }
+
+    function extractConstraints(description) {
+      /**
+       * Extract ALL constraints from YAML metadata + description text
+       * Returns array of constraint strings
+       */
+      const constraints = [];
+
+      // Priority 1: YAML metadata constraints (most reliable)
+      const yamlConstraints = extractYAMLConstraints(description);
+      constraints.push(...yamlConstraints);
+
+      // Priority 2: Text-based constraints (supplementary)
+      const textConstraints = extractTextConstraints(description);
+
+      // Deduplicate - avoid repeating similar constraints
+      for (const textConstraint of textConstraints) {
+        const textLower = textConstraint.toLowerCase();
+        const isDuplicate = constraints.some(existing => {
+          const existingLower = existing.toLowerCase();
+          // Check for substantial overlap
+          return existingLower.includes(textLower) || textLower.includes(existingLower);
+        });
+
+        if (!isDuplicate) {
+          constraints.push(textConstraint);
         }
       }
 
@@ -2456,11 +2547,27 @@ This skill will be automatically loaded by Claude Code when relevant.
 
         let finalAnalysis = utilityAnalysis;
         if (validationResult.hasContradictions) {
+          // Log found constraints
+          addLog(`✓ Found ${validationResult.constraints.length} constraint(s):`, 'info');
+          validationResult.constraints.forEach(c => {
+            addLog(`  - "${c.substring(0, 80)}${c.length > 80 ? '...' : ''}"`, 'info');
+          });
+
+          // Log contradictions
           addLog(`⚠️ Constraint contradictions detected: ${validationResult.contradictions.length} claim(s) invalidated`, 'warning');
-          addLog(`Score adjusted: ${validationResult.originalScore}/10 → ${validationResult.revisedScore}/10`, 'warning');
+          validationResult.contradictions.forEach(contradiction => {
+            addLog(`  ✗ Claim: "${contradiction.claim}"`, 'warning');
+            addLog(`    Conflicts: "${contradiction.constraint.substring(0, 60)}${contradiction.constraint.length > 60 ? '...' : ''}"`, 'warning');
+          });
+
+          addLog(`Score recalculated: ${validationResult.originalScore}/10 → ${validationResult.revisedScore}/10 (${validationResult.scoreChange})`, 'warning');
           finalAnalysis = validationResult.revisedAnalysis;
         } else if (validationResult.hasConstraints) {
-          addLog(`✓ Constraint validation passed: ${validationResult.claimsChecked || 0} claim(s) validated`, 'success');
+          addLog(`✓ Found ${validationResult.constraints.length} constraint(s) - all claims validated`, 'success');
+          validationResult.constraints.forEach(c => {
+            addLog(`  - "${c.substring(0, 80)}${c.length > 80 ? '...' : ''}"`, 'info');
+          });
+          addLog(`✓ Constraint validation passed: ${validationResult.claimsChecked || 0} claim(s) verified`, 'success');
         } else {
           addLog('✓ No constraints found - analysis valid', 'success');
         }
