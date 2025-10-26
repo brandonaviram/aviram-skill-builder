@@ -55,6 +55,12 @@ build/
 # Test files
 test-skills/
 generated-skills/
+test-enhancement.html
+test-enhancement.js
+
+# Package files (dev dependencies only)
+package.json
+package-lock.json
 
 # Logs
 *.log
