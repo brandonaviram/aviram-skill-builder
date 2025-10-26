@@ -2620,6 +2620,540 @@ Return ONLY the JSON object, no markdown, no other text.`;
       startGeneration();
     }
 
+    // ============================================================
+    // AUTO-VALIDATION & SELF-REDESIGN LOOP
+    // ============================================================
+
+    const SKILL_VALIDATION_RULES = {
+      power_up_honest: {
+        name: 'Power-up Honesty',
+        description: 'Power-up claim matches actual capability gap',
+        check: checkPowerUpHonesty,
+        fixable: true,
+        auto_fix: fixPowerUpHonesty
+      },
+
+      focused_scope: {
+        name: 'Focused Scope',
+        description: 'Skill scope is 1-2 topics, not 5+',
+        check: checkFocusedScope,
+        fixable: true,
+        auto_fix: fixFocusedScope
+      },
+
+      progressive_disclosure: {
+        name: 'Progressive Disclosure',
+        description: 'Main SKILL.md under 200 lines, secondary content separated',
+        check: checkProgressiveDisclosure,
+        fixable: true,
+        auto_fix: fixProgressiveDisclosure
+      },
+
+      constraint_clarity: {
+        name: 'Constraint Clarity',
+        description: 'Constraints reframed as responsibility boundaries',
+        check: checkConstraintClarity,
+        fixable: true,
+        auto_fix: fixConstraintClarity
+      },
+
+      dependencies_documented: {
+        name: 'Dependencies Documented',
+        description: 'All version requirements and prerequisites listed',
+        check: checkDependenciesDocumented,
+        fixable: true,
+        auto_fix: fixDependenciesDocumented
+      },
+
+      metadata_complete: {
+        name: 'Metadata Complete',
+        description: 'All metadata fields present and valid',
+        check: checkMetadataComplete,
+        fixable: true,
+        auto_fix: fixMetadataComplete
+      }
+    };
+
+    // ============================================================
+    // CHECK FUNCTIONS
+    // ============================================================
+
+    function checkPowerUpHonesty(skillPackage) {
+      const { metadata, documentation } = skillPackage;
+
+      // Extract power-up claims from description
+      const description = metadata.description || '';
+      const lowerDesc = description.toLowerCase();
+
+      // Check for overpromising keywords
+      const overPromisePatterns = [
+        'executable validation tools',
+        'automated testing',
+        'real-time',
+        'live testing',
+        'device testing',
+        'interactive testing'
+      ];
+
+      // Check for contradictions with limitations
+      const hasLimitations = documentation.toLowerCase().includes('limitations') ||
+                            documentation.toLowerCase().includes('cannot') ||
+                            documentation.toLowerCase().includes('does not');
+
+      const hasOverPromise = overPromisePatterns.some(pattern => lowerDesc.includes(pattern));
+
+      if (hasOverPromise && hasLimitations) {
+        return {
+          pass: false,
+          issue: `Power-up statement may overpromise capabilities. Found claims like "executable validation" but documentation lists limitations.`,
+          severity: 'high'
+        };
+      }
+
+      return { pass: true };
+    }
+
+    function checkFocusedScope(skillPackage) {
+      const { documentation } = skillPackage;
+
+      // Count distinct major topics by looking for ## headings
+      const headings = documentation.match(/^##\s+(.+)$/gm) || [];
+      const topics = headings.map(h => h.replace(/^##\s+/, '').trim());
+
+      // Common topic categories to detect
+      const topicCategories = {
+        colors: ['color', 'palette', 'theme'],
+        components: ['component', 'widget', 'control'],
+        testing: ['test', 'validation', 'verify'],
+        migration: ['migrat', 'upgrad', 'transition'],
+        accessibility: ['accessibility', 'a11y', 'voiceover'],
+        architecture: ['architect', 'structure', 'pattern'],
+        performance: ['performance', 'optimiz', 'efficiency']
+      };
+
+      // Identify which categories are present
+      const categoriesFound = new Set();
+      topics.forEach(topic => {
+        const lowerTopic = topic.toLowerCase();
+        Object.entries(topicCategories).forEach(([category, keywords]) => {
+          if (keywords.some(kw => lowerTopic.includes(kw))) {
+            categoriesFound.add(category);
+          }
+        });
+      });
+
+      if (categoriesFound.size > 3) {
+        return {
+          pass: false,
+          issue: `Skill covers too many topics (${categoriesFound.size}): ${Array.from(categoriesFound).join(', ')}. Should focus on 1-2 core topics.`,
+          severity: 'high',
+          metadata: { topics: Array.from(categoriesFound) }
+        };
+      }
+
+      return { pass: true };
+    }
+
+    function checkProgressiveDisclosure(skillPackage) {
+      const { documentation } = skillPackage;
+
+      // Count lines in documentation
+      const lines = documentation.split('\n').length;
+
+      if (lines > 200) {
+        return {
+          pass: false,
+          issue: `Documentation is ${lines} lines, exceeds 200 line target. Consider splitting into multiple files.`,
+          severity: 'medium',
+          metadata: { lineCount: lines }
+        };
+      }
+
+      return { pass: true };
+    }
+
+    function checkConstraintClarity(skillPackage) {
+      const { documentation } = skillPackage;
+
+      const lowerDoc = documentation.toLowerCase();
+
+      // Check for negative constraint framing (bad)
+      const negativePatterns = [
+        'cannot test on actual',
+        'cannot access real',
+        'unable to',
+        'does not support',
+        'not possible'
+      ];
+
+      // Check for responsibility boundary framing (good)
+      const boundaryPatterns = [
+        'claude responsibility',
+        'user responsibility',
+        'you implement',
+        'you test',
+        'claude generates',
+        'claude provides'
+      ];
+
+      const hasNegativeFraming = negativePatterns.some(p => lowerDoc.includes(p));
+      const hasBoundaryFraming = boundaryPatterns.some(p => lowerDoc.includes(p));
+
+      if (hasNegativeFraming && !hasBoundaryFraming) {
+        return {
+          pass: false,
+          issue: `Constraints use negative framing ("cannot", "unable") instead of clear responsibility boundaries.`,
+          severity: 'medium'
+        };
+      }
+
+      return { pass: true };
+    }
+
+    function checkDependenciesDocumented(skillPackage) {
+      const { documentation, requirements } = skillPackage;
+
+      const lowerDoc = documentation.toLowerCase();
+
+      // Check if skill mentions versions/requirements
+      const hasVersionRequirements = lowerDoc.includes('requires') ||
+                                     lowerDoc.includes('prerequisite') ||
+                                     lowerDoc.includes('## requirements') ||
+                                     lowerDoc.includes('## dependencies');
+
+      // If language-specific, should document version requirements
+      const language = requirements.programming_language;
+      if (language && language.toLowerCase() !== 'general') {
+        if (!hasVersionRequirements) {
+          return {
+            pass: false,
+            issue: `Language-specific skill (${language}) should document version requirements and prerequisites.`,
+            severity: 'low'
+          };
+        }
+      }
+
+      return { pass: true };
+    }
+
+    function checkMetadataComplete(skillPackage) {
+      const { metadata } = skillPackage;
+
+      const requiredFields = ['name', 'description', 'version', 'complexity'];
+      const missingFields = requiredFields.filter(field => !metadata[field]);
+
+      if (missingFields.length > 0) {
+        return {
+          pass: false,
+          issue: `Missing required metadata fields: ${missingFields.join(', ')}`,
+          severity: 'high',
+          metadata: { missingFields }
+        };
+      }
+
+      // Check if constraints are documented in metadata
+      if (!metadata.constraints) {
+        return {
+          pass: false,
+          issue: `Metadata should include 'constraints' field documenting limitations.`,
+          severity: 'medium'
+        };
+      }
+
+      return { pass: true };
+    }
+
+    // ============================================================
+    // AUTO-FIX FUNCTIONS
+    // ============================================================
+
+    async function fixPowerUpHonesty(skillPackage) {
+      addLog('Auto-fixing: Rewriting power-up statement to match actual capabilities...', 'info');
+
+      const { metadata, documentation, requirements } = skillPackage;
+
+      // Use Claude to rewrite the description to be more honest
+      const prompt = `You are fixing a skill's power-up statement to be honest about capabilities.
+
+CURRENT DESCRIPTION: "${metadata.description}"
+
+SKILL DOCUMENTATION EXCERPT:
+${documentation.substring(0, 500)}
+
+CONSTRAINTS FROM VALIDATION:
+- Claude cannot execute validation tools or test on actual devices
+- Claude CAN provide: templates, patterns, frameworks, analysis, recommendations
+- Claude CANNOT provide: real-time testing, device testing, executable validation
+
+Rewrite the description to accurately reflect what Claude provides (knowledge, patterns, templates) without promising execution capabilities.
+
+Return ONLY the rewritten description (max 200 chars), nothing else.`;
+
+      try {
+        const newDescription = await callClaude(prompt, 300);
+        metadata.description = newDescription.trim().replace(/^["']|["']$/g, '');
+        addLog(`✓ Power-up rewritten: "${metadata.description}"`, 'success');
+      } catch (err) {
+        addLog(`⚠️ Auto-fix failed, using fallback`, 'warning');
+        // Fallback: Generic safe description
+        metadata.description = `${requirements.skill_name} implementation patterns and best practices for ${requirements.programming_language || 'development'}`;
+      }
+
+      return skillPackage;
+    }
+
+    async function fixFocusedScope(skillPackage) {
+      addLog('Auto-fixing: Skill scope too broad, adding focus note...', 'warning');
+
+      // Note: Auto-splitting into separate skills is complex and requires user decision
+      // For now, we'll add a note to the documentation to help users navigate
+
+      // Add a note about scope
+      const note = `> **Scope Note:** This skill covers multiple topics. Focus on the sections most relevant to your current task.\n\n`;
+      skillPackage.documentation = note + skillPackage.documentation;
+
+      addLog('✓ Added scope navigation note to documentation', 'success');
+      return skillPackage;
+    }
+
+    async function fixProgressiveDisclosure(skillPackage) {
+      addLog('Auto-fixing: Documentation too long, adding structure note...', 'info');
+
+      // Add a progressive disclosure note
+      const note = `> **Progressive Disclosure:** This documentation is comprehensive. Use Ctrl+F to find specific sections.\n\n`;
+      skillPackage.documentation = note + skillPackage.documentation;
+
+      addLog('✓ Added navigation note for long documentation', 'success');
+      return skillPackage;
+    }
+
+    async function fixConstraintClarity(skillPackage) {
+      addLog('Auto-fixing: Reframing constraints as responsibility boundaries...', 'info');
+
+      const { documentation } = skillPackage;
+
+      // Use Claude to reframe constraints
+      const prompt = `You are reframing constraints in a skill's documentation to be clearer about responsibility boundaries.
+
+CURRENT DOCUMENTATION (first 800 chars):
+${documentation.substring(0, 800)}
+
+Find any negative constraint language like "cannot", "unable to", "does not support" and reframe them as:
+
+**Responsibility Boundaries:**
+- **Claude provides:** [what Claude does - patterns, templates, analysis]
+- **You implement:** [what user does - testing, deployment, integration]
+- **Claude is halted by:** [technical limitations stated positively]
+
+Return ONLY the "Responsibility Boundaries" section (markdown format), nothing else.`;
+
+      try {
+        const boundariesSection = await callClaude(prompt, 400);
+
+        // Find limitations section and replace or add boundaries section
+        if (documentation.includes('## Limitations')) {
+          skillPackage.documentation = documentation.replace(
+            /## Limitations[\s\S]*?(?=##|$)/,
+            `## Limitations\n\n${boundariesSection}\n\n`
+          );
+        } else {
+          // Add before examples section or at end
+          const insertPoint = documentation.indexOf('## Examples');
+          if (insertPoint > -1) {
+            skillPackage.documentation = documentation.substring(0, insertPoint) +
+              `## Limitations\n\n${boundariesSection}\n\n` +
+              documentation.substring(insertPoint);
+          } else {
+            skillPackage.documentation = documentation + `\n\n## Limitations\n\n${boundariesSection}\n`;
+          }
+        }
+
+        addLog('✓ Constraints reframed as responsibility boundaries', 'success');
+      } catch (err) {
+        addLog('⚠️ Auto-fix failed, using fallback', 'warning');
+        // Fallback: Add generic boundaries
+        const fallback = `\n\n## Responsibility Boundaries\n\n**Claude provides:** Implementation patterns, code templates, and best practices guidance.\n\n**You implement:** Integration with your project, testing, and deployment.\n`;
+        skillPackage.documentation += fallback;
+      }
+
+      return skillPackage;
+    }
+
+    async function fixDependenciesDocumented(skillPackage) {
+      addLog('Auto-fixing: Adding dependencies section...', 'info');
+
+      const { requirements } = skillPackage;
+
+      // Create a requirements section
+      const reqSection = `\n\n## Requirements\n\n`;
+
+      if (requirements.programming_language && requirements.programming_language !== 'general') {
+        const lang = requirements.programming_language;
+        skillPackage.documentation = reqSection +
+          `- **Language:** ${lang}\n` +
+          `- **Version:** Latest stable release recommended\n` +
+          (requirements.required_apis ? `- **APIs/Libraries:** ${requirements.required_apis.join(', ')}\n` : '') +
+          `\n` +
+          skillPackage.documentation;
+      } else {
+        skillPackage.documentation = reqSection +
+          `- **Environment:** General development environment\n` +
+          (requirements.required_apis ? `- **Tools:** ${requirements.required_apis.join(', ')}\n` : '') +
+          `\n` +
+          skillPackage.documentation;
+      }
+
+      addLog('✓ Dependencies section added', 'success');
+      return skillPackage;
+    }
+
+    async function fixMetadataComplete(skillPackage) {
+      addLog('Auto-fixing: Completing metadata fields...', 'info');
+
+      const { metadata } = skillPackage;
+
+      // Fill in missing required fields
+      if (!metadata.version) {
+        metadata.version = '1.0.0';
+      }
+
+      if (!metadata.complexity) {
+        // Infer from documentation length
+        const docLength = skillPackage.documentation.length;
+        metadata.complexity = docLength > 3000 ? 'complex' : docLength > 1500 ? 'moderate' : 'simple';
+      }
+
+      if (!metadata.author) {
+        metadata.author = 'Skill Factory';
+      }
+
+      if (!metadata.constraints) {
+        // Extract from documentation or use default
+        const docLower = skillPackage.documentation.toLowerCase();
+        if (docLower.includes('limitations') || docLower.includes('cannot')) {
+          metadata.constraints = 'See Limitations section in documentation';
+        } else {
+          metadata.constraints = 'Claude provides patterns and templates. User implements and tests.';
+        }
+      }
+
+      addLog('✓ Metadata completed', 'success');
+      return skillPackage;
+    }
+
+    // ============================================================
+    // VALIDATION LOOP ORCHESTRATION
+    // ============================================================
+
+    async function validateSkillPackage(skillPackage) {
+      const results = {
+        allPass: true,
+        failures: [],
+        passes: []
+      };
+
+      for (const [ruleKey, rule] of Object.entries(SKILL_VALIDATION_RULES)) {
+        const result = rule.check(skillPackage);
+
+        if (result.pass) {
+          results.passes.push({
+            rule: ruleKey,
+            name: rule.name
+          });
+        } else {
+          results.allPass = false;
+          results.failures.push({
+            rule: ruleKey,
+            name: rule.name,
+            issue: result.issue,
+            severity: result.severity,
+            fixable: rule.fixable,
+            auto_fix: rule.auto_fix,
+            metadata: result.metadata
+          });
+        }
+      }
+
+      return results;
+    }
+
+    async function generateWithAutoValidation(requirements, research) {
+      addLog('Starting generation with auto-validation loop...', 'info');
+
+      // Initial generation
+      let metadata = await generateMetadata(requirements, research);
+      let documentation = await generateDocumentation(requirements, research, metadata);
+      let skillPackage = { metadata, documentation, requirements };
+
+      // Validation loop
+      const maxAttempts = 3;
+      let attempt = 0;
+
+      while (attempt < maxAttempts) {
+        attempt++;
+        addLog(`Validation attempt ${attempt}/${maxAttempts}...`, 'info');
+
+        const validation = await validateSkillPackage(skillPackage);
+
+        // Log passed checks
+        if (validation.passes.length > 0) {
+          addLog(`✓ Passed: ${validation.passes.map(p => p.name).join(', ')}`, 'success');
+        }
+
+        if (validation.allPass) {
+          addLog('🎉 All validation checks passed! Skill is production-ready.', 'success');
+          return {
+            status: 'production_ready',
+            skillPackage,
+            attempt
+          };
+        }
+
+        // Log failures
+        addLog(`Found ${validation.failures.length} issue(s) to fix:`, 'warning');
+        validation.failures.forEach(failure => {
+          addLog(`  ✗ ${failure.name}: ${failure.issue}`, 'warning');
+        });
+
+        // Try to auto-fix
+        let fixedAny = false;
+        for (const failure of validation.failures) {
+          if (failure.fixable && failure.auto_fix) {
+            try {
+              skillPackage = await failure.auto_fix(skillPackage);
+              fixedAny = true;
+            } catch (err) {
+              addLog(`⚠️ Auto-fix failed for ${failure.name}: ${err.message}`, 'error');
+            }
+          } else {
+            addLog(`⚠️ Cannot auto-fix: ${failure.name}`, 'warning');
+          }
+        }
+
+        if (!fixedAny) {
+          addLog('No fixes could be applied. Proceeding with current version.', 'warning');
+          return {
+            status: 'partially_validated',
+            skillPackage,
+            attempt,
+            remainingIssues: validation.failures
+          };
+        }
+      }
+
+      // Max attempts reached
+      addLog(`⚠️ Reached maximum validation attempts (${maxAttempts}). Proceeding with best version.`, 'warning');
+      return {
+        status: 'max_attempts_reached',
+        skillPackage,
+        attempt: maxAttempts
+      };
+    }
+
+    // ============================================================
+    // END AUTO-VALIDATION & SELF-REDESIGN LOOP
+    // ============================================================
+
     async function continueToResearch() {
       if (!currentRequirements || !utilityAnalysisResult) {
         addLog('Missing requirements or utility analysis', 'error');
@@ -2639,13 +3173,21 @@ Return ONLY the JSON object, no markdown, no other text.`;
         setStep(3); // Research phase (now step 3 instead of 2)
         const research = await conductResearch(currentRequirements);
 
-        setStep(4); // Generate phase (now step 4 instead of 3)
-        const metadata = await generateMetadata(currentRequirements, research);
-        const documentation = await generateDocumentation(currentRequirements, research, metadata);
+        setStep(4); // Generate phase with auto-validation loop (now step 4 instead of 3)
+        const result = await generateWithAutoValidation(currentRequirements, research);
 
-        const skillPackage = { metadata, documentation, requirements: currentRequirements };
+        // Log auto-validation result
+        if (result.status === 'production_ready') {
+          addLog(`✓ Auto-validation succeeded in ${result.attempt} attempt(s)`, 'success');
+        } else if (result.status === 'partially_validated') {
+          addLog(`⚠️ Partial validation after ${result.attempt} attempt(s). ${result.remainingIssues.length} issue(s) remain.`, 'warning');
+        } else {
+          addLog(`⚠️ Max validation attempts reached. Proceeding with best version.`, 'warning');
+        }
 
-        setStep(5); // Validate phase (now step 5 instead of 4)
+        const skillPackage = result.skillPackage;
+
+        setStep(5); // Final validation phase (now step 5 instead of 4)
         const validation = await validateGeneration(skillPackage);
 
         if (validation.issues.length > 0) {

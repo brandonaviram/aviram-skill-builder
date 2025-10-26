@@ -6,9 +6,10 @@ A beautiful, single-file web application that transforms rough ideas into produc
 
 ## Features
 
-- **5-Stage Pipeline**: Input → Research → Generate → Validate → Package
+- **6-Stage Pipeline**: Input → Utility Analysis → Research → Generate → **Auto-Validate** → Package
 - **AI-Powered Generation**: Uses Claude Sonnet 4 for intelligent skill creation
-- **Real-time Validation**: Ensures YAML compliance and quality standards
+- **Auto-Validation Loop**: Automatically validates and fixes common issues before output
+- **Real-time Quality Checks**: 6 deterministic validation rules ensure production-ready skills
 - **One-Click Download**: Generates ready-to-install ZIP packages
 - **Glassmorphic UI**: Beautiful Aviram OS design language
 
@@ -45,7 +46,7 @@ A beautiful, single-file web application that transforms rough ideas into produc
 
 ## How It Works
 
-### 5-Stage Generation Pipeline
+### 6-Stage Generation Pipeline
 
 1. **Input Processing**: Extracts requirements, determines complexity, identifies key features
 2. **Phase 0 - Utility Analysis**:
@@ -54,8 +55,12 @@ A beautiful, single-file web application that transforms rough ideas into produc
    - Prevents false HIGH_UTILITY scores for contradictory capabilities
    - Routes to Research (HIGH), Redesign (MEDIUM), or Rejection (LOW)
 3. **Research**: Conducts focused research on best practices, APIs, and implementation patterns
-4. **Generate**: Creates YAML metadata and comprehensive documentation
-5. **Validate**: Ensures YAML compliance, checks quality score, validates structure
+4. **Generate with Auto-Validation**: Creates YAML metadata and comprehensive documentation, then:
+   - **Auto-validates** against 6 quality rules
+   - **Auto-fixes** common issues (overpromising descriptions, unclear constraints, missing metadata)
+   - **Iterates** up to 3 times until production-ready
+   - Logs all validation checks and fixes in real-time
+5. **Final Validate**: Ensures YAML compliance, checks quality score, validates structure
 6. **Package**: Bundles everything into a properly formatted ZIP with README
 
 ### What Gets Generated
@@ -67,18 +72,53 @@ Each skill package includes:
 
 ### Quality Standards
 
-- YAML validation (name format, required fields, proper structure)
-- Quality scoring (metadata validity, documentation depth, completeness)
-- Safe character handling (prevents YAML injection, escapes special chars)
-- Naming conventions (lowercase-hyphenated, max 64 chars)
-- **Constraint Validation Gate** (Phase 0):
+#### Phase 0: Utility Analysis
+- **Constraint Validation Gate**:
   - Extracts constraints from skill description (e.g., "Cannot access live data")
   - Validates power-up claims don't contradict constraints
   - Recalculates utility score when contradictions detected
   - Prevents false HIGH_UTILITY scores for documentation-only skills
+
+#### Phase 4: Auto-Validation Loop (NEW ✨)
+Six deterministic rules that automatically validate and fix skills:
+
+1. **Power-up Honesty** ✓ Auto-fixable
+   - Validates description matches actual capabilities
+   - Detects overpromising ("executable validation", "real-time testing")
+   - Auto-rewrites using Claude to match documented limitations
+
+2. **Focused Scope** ✓ Auto-fixable
+   - Ensures skill focuses on 1-2 topics, not 5+
+   - Analyzes section headings to categorize topics
+   - Adds navigation notes for broad skills
+
+3. **Progressive Disclosure** ✓ Auto-fixable
+   - Checks main documentation is under 200 lines
+   - Adds navigation helpers for comprehensive docs
+
+4. **Constraint Clarity** ✓ Auto-fixable
+   - Reframes negative constraints as responsibility boundaries
+   - Converts "cannot" → "Claude provides X, You implement Y"
+   - Uses Claude to rewrite limitations section
+
+5. **Dependencies Documented** ✓ Auto-fixable
+   - Ensures version requirements are listed
+   - Adds Requirements section for language-specific skills
+
+6. **Metadata Complete** ✓ Auto-fixable
+   - Validates all required fields present
+   - Fills missing fields with sensible defaults
+   - Ensures constraints field documents limitations
+
+#### Phase 5: Final Validation
+- YAML validation (name format, required fields, proper structure)
+- Quality scoring (metadata validity, documentation depth, completeness)
+- Safe character handling (prevents YAML injection, escapes special chars)
+- Naming conventions (lowercase-hyphenated, max 64 chars)
 - **Red flag detection** (identifies promises of real-time data, external integrations, etc.)
 
-See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) and [CONSTRAINT_VALIDATION_TESTING.md](CONSTRAINT_VALIDATION_TESTING.md) for detailed validation guidelines.
+See [AUTO_VALIDATION_SYSTEM.md](AUTO_VALIDATION_SYSTEM.md) for detailed auto-validation documentation.
+See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) and [CONSTRAINT_VALIDATION_TESTING.md](CONSTRAINT_VALIDATION_TESTING.md) for validation guidelines.
 
 ## Examples
 
@@ -163,6 +203,7 @@ This is a static HTML file - no development server needed. Just edit `index.html
 
 - [x] Local storage for API key persistence
 - [x] Validation framework with constraint checking
+- [x] Auto-validation and self-redesign loop (6 fixable rules)
 - [ ] Support for multi-file skills (scripts, templates, references)
 - [ ] API key encryption in localStorage
 - [ ] Template library for common skill patterns
