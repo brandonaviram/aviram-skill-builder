@@ -1120,6 +1120,43 @@ The more texture you give, the sharper the output. But even 'email automation' i
     const steps = ['Input', 'Utility Analysis', 'Research', 'Generate', 'Validate', 'Package'];
     const API_KEY_STORAGE_KEY = 'anthropic_api_key';
 
+    // ============================================
+    // CLAUDE CAPABILITIES CONTEXT (October 2025)
+    // Single source of truth for what Claude can/cannot do
+    // Updated: 2025-10-26
+    // ============================================
+    const CLAUDE_CAPABILITIES = {
+      can_do: {
+        web_search_real_time: "Claude HAS web search capability (launched March 2025)",
+        bash_execution: "Claude Code CAN execute bash commands locally",
+        file_operations: "Claude Code CAN read/write files locally",
+        code_execution: "Claude Code CAN run scripts and commands",
+        algorithm_application: "Claude CAN apply algorithms and reasoning frameworks",
+        api_integration: "Claude CAN help build and execute API calls"
+      },
+
+      cannot_do: {
+        production_deployment: "Claude CANNOT autonomously deploy to production systems",
+        indefinite_operation: "Claude CANNOT run indefinitely without user supervision",
+        protected_system_access: "Claude CANNOT access protected systems without user permission",
+        permanent_state: "Claude CANNOT maintain state across independent sessions"
+      },
+
+      // Convert to prompt format for injection into LLM prompts
+      toPromptFormat: function() {
+        return `CRITICAL CAPABILITY FACTS (October 2025):
+✓ ${this.can_do.web_search_real_time}
+✓ ${this.can_do.bash_execution}
+✓ ${this.can_do.file_operations}
+✓ ${this.can_do.code_execution}
+
+CLAUDE LIMITATIONS:
+✗ ${this.cannot_do.production_deployment}
+✗ ${this.cannot_do.indefinite_operation}
+✗ ${this.cannot_do.protected_system_access}`;
+      }
+    };
+
     // API Key localStorage Management
     function loadApiKey() {
       const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
@@ -1360,9 +1397,12 @@ documentation that Claude can already produce.
 Your north star: Skills should make Claude measurably better at something,
 not just give it well-organized information it already has.
 
+${CLAUDE_CAPABILITIES.toPromptFormat()}
+
 Evaluate this skill request using the three universal questions:
 
 1. Can Claude already do this well from training data?
+   (Use the capability facts above to inform your answer)
 2. What specific value does this skill provide that Claude doesn't have?
    - Executable code solving hard problems?
    - Embedded domain data or algorithms?
@@ -1491,11 +1531,7 @@ EXECUTOR: External automation that Claude Code cannot perform
 - Indicators: "deployment", "CI/CD", "database operations", "cloud automation", "infrastructure"
 - Key test: Can Claude Code execute this? If NO (requires external systems) → EXECUTOR
 
-CRITICAL CAPABILITY FACTS (October 2025):
-✓ Claude HAS web search capability (launched March 2025)
-✓ Claude Code CAN execute bash commands locally
-✓ Claude Code CAN read/write files
-✓ Claude Code CAN run scripts and commands
+${CLAUDE_CAPABILITIES.toPromptFormat()}
 
 CRITICAL: Be strict about categorization based on ACTUAL capabilities.
 - If unsure between TEMPLATE and METHODOLOGY, ask: "Can Claude apply
@@ -1680,6 +1716,8 @@ Your job is to research what practitioners in the ${domainContext.primary_domain
 domain actually struggle with, then suggest skill redesigns grounded in those
 real problems.
 
+${CLAUDE_CAPABILITIES.toPromptFormat()}
+
 Given a skill request, answer:
 
 1. PRACTITIONER PAIN POINTS (MUST BE IN ${domainContext.primary_domain.toUpperCase()})
@@ -1696,6 +1734,7 @@ Given a skill request, answer:
 2. CLAUDE CAPABILITY GAP (SPECIFIC TO ${domainContext.primary_domain.toUpperCase()})
    - What specifically can't Claude do well for ${domainContext.primary_domain}? (Not "general advice")
    - What would Claude need to do this? (Be concrete)
+   - Consider the capabilities listed above - don't suggest gaps for capabilities Claude already has
    - Example: "Claude can discuss budgeting but cannot model
      constraint satisfaction with location-specific dependencies"
 
