@@ -1402,6 +1402,47 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
         .substring(0, 255);
     }
 
+    /**
+     * Retry a function with exponential backoff
+     * @param {Function} fn - Async function to retry
+     * @param {number} maxRetries - Maximum number of retry attempts (default: 4)
+     * @param {number} initialDelay - Initial delay in milliseconds (default: 2000)
+     * @returns {Promise} - Result of the function
+     */
+    async function retryWithExponentialBackoff(fn, maxRetries = 4, initialDelay = 2000) {
+      let lastError;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (err) {
+          lastError = err;
+
+          // Don't retry on certain errors (API key issues, validation errors, etc.)
+          if (err.message.includes('API key') ||
+              err.message.includes('400') ||
+              err.message.includes('401') ||
+              err.message.includes('403')) {
+            throw err;
+          }
+
+          // If this was the last attempt, throw the error
+          if (attempt === maxRetries) {
+            throw err;
+          }
+
+          // Calculate delay with exponential backoff: 2s, 4s, 8s, 16s
+          const delay = initialDelay * Math.pow(2, attempt);
+          addLog(`Network error on attempt ${attempt + 1}/${maxRetries + 1}. Retrying in ${delay/1000}s...`, 'warning');
+
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+
+      throw lastError;
+    }
+
     async function callClaude(prompt, maxTokens = 2000) {
       const apiKey = document.getElementById('apiKey').value.trim();
 
@@ -1409,32 +1450,35 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
         throw new Error('Please enter your Anthropic API key');
       }
 
-      try {
-        const response = await fetch("/api/claude", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            apiKey,
-            prompt,
-            maxTokens
-          })
-        });
+      // Wrap the fetch call with retry logic
+      return await retryWithExponentialBackoff(async () => {
+        try {
+          const response = await fetch("/api/claude", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              apiKey,
+              prompt,
+              maxTokens
+            })
+          });
 
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error.error || `API request failed with status ${response.status}`);
-        }
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || `API request failed with status ${response.status}`);
+          }
 
-        const data = await response.json();
-        return data.text;
-      } catch (err) {
-        if (err.message.includes('API request failed')) {
-          throw err;
+          const data = await response.json();
+          return data.text;
+        } catch (err) {
+          if (err.message.includes('API request failed')) {
+            throw err;
+          }
+          throw new Error(`Network error: ${err.message}. Check your API key and internet connection.`);
         }
-        throw new Error(`Network error: ${err.message}. Check your API key and internet connection.`);
-      }
+      });
     }
 
     async function extractRequirements(input) {
