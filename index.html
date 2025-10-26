@@ -3656,11 +3656,31 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
         setStep(6); // Package phase (now step 6 instead of 5)
         const pkg = await packageSkill(skillPackage, currentRequirements.skill_name);
 
+        // Pre-extract and cache the prompt content for synchronous clipboard access (iOS compatibility)
+        let cachedPromptContent = null;
+        try {
+          const zip = await JSZip.loadAsync(pkg.content);
+          const skillMdFile = Object.keys(zip.files).find(f => f.endsWith('SKILL.md'));
+          if (skillMdFile) {
+            const skillContent = await zip.files[skillMdFile].async('text');
+            cachedPromptContent = `You are now equipped with the following skill:
+
+---
+${skillContent}
+---
+
+When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
+          }
+        } catch (err) {
+          console.warn('Failed to pre-extract prompt content:', err);
+        }
+
         generatedSkillData = {
           package: pkg.content,
           filename: pkg.filename,
           tree: pkg.tree,
-          validation
+          validation,
+          promptContent: cachedPromptContent // Cache for synchronous clipboard access
         };
 
         showResults(validation, pkg.tree, pkg.filename);
@@ -4178,44 +4198,89 @@ This skill will be automatically loaded by Claude Code when relevant.
       addLog(`Downloaded ${generatedSkillData.filename}`, 'success');
     }
 
-    async function copyPromptToClipboard() {
-      if (!generatedSkillData || !generatedSkillData.package) {
+    function copyPromptToClipboard() {
+      if (!generatedSkillData) {
         addLog('No skill available to copy', 'error');
         return;
       }
 
+      // Use cached prompt content for synchronous copy (iOS compatibility)
+      const prompt = generatedSkillData.promptContent;
+
+      if (!prompt) {
+        addLog('Prompt content not available. Please regenerate the skill.', 'error');
+        return;
+      }
+
       try {
-        // Extract SKILL.md content from the ZIP
-        const zip = await JSZip.loadAsync(generatedSkillData.package);
-        const skillMdFile = Object.keys(zip.files).find(f => f.endsWith('SKILL.md'));
-
-        if (!skillMdFile) {
-          throw new Error('SKILL.md not found in package');
-        }
-
-        const skillContent = await zip.files[skillMdFile].async('text');
-
-        // Format as a prompt
-        const prompt = `You are now equipped with the following skill:
-
----
-${skillContent}
----
-
-When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
-
-        // Try clipboard API
+        // Try modern Clipboard API first (works on iOS if called synchronously)
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(prompt);
-          showCopySuccess();
-          addLog('Skill prompt copied to clipboard!', 'success');
+          navigator.clipboard.writeText(prompt)
+            .then(() => {
+              showCopySuccess();
+              addLog('Skill prompt copied to clipboard!', 'success');
+            })
+            .catch(err => {
+              // Fallback to textarea method for iOS
+              console.log('Clipboard API failed, using fallback:', err);
+              copyToClipboardFallback(prompt);
+            });
         } else {
-          throw new Error('Clipboard API not available. Please use HTTPS or a modern browser.');
+          // Use fallback for browsers without Clipboard API
+          copyToClipboardFallback(prompt);
         }
 
       } catch (error) {
         addLog(`Failed to copy: ${error.message}`, 'error');
         console.error('Copy error:', error);
+      }
+    }
+
+    function copyToClipboardFallback(text) {
+      // iOS-compatible fallback using textarea and execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '0';
+      textarea.style.width = '2em';
+      textarea.style.height = '2em';
+      textarea.style.padding = '0';
+      textarea.style.border = 'none';
+      textarea.style.outline = 'none';
+      textarea.style.boxShadow = 'none';
+      textarea.style.background = 'transparent';
+      textarea.setAttribute('readonly', '');
+
+      document.body.appendChild(textarea);
+
+      // iOS Safari requires contentEditable and specific selection
+      textarea.contentEditable = true;
+      textarea.readOnly = false;
+
+      const range = document.createRange();
+      range.selectNodeContents(textarea);
+
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      textarea.setSelectionRange(0, text.length);
+
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        if (successful) {
+          showCopySuccess();
+          addLog('Skill prompt copied to clipboard!', 'success');
+        } else {
+          throw new Error('Copy command failed');
+        }
+      } catch (err) {
+        document.body.removeChild(textarea);
+        addLog('Failed to copy. Please copy manually.', 'error');
+        console.error('Fallback copy error:', err);
       }
     }
 
