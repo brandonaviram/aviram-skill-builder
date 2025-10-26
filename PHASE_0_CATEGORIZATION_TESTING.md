@@ -33,11 +33,12 @@ This document provides comprehensive testing instructions for the Phase 0 Skill 
 ## Category Definitions
 
 ### TEMPLATE (❌ Not a Power-up)
-- **Description:** Code generation tools for humans to implement
+- **Description:** Code templates/examples for humans to implement
 - **Max Utility:** 3/10
-- **Examples:** "web scraping framework", "API client generator", "boilerplate generator"
-- **Indicators:** framework, generator, templates, examples, boilerplate, scaffolding
+- **Examples:** "boilerplate generator", "scaffolding templates", "starter code"
+- **Indicators:** templates, examples, boilerplate, scaffolding, starter
 - **Claude Gains:** Nothing (already knows these patterns)
+- **Key Test:** Can Claude USE this itself? If NO (just static code examples) → TEMPLATE
 
 ### METHODOLOGY (✅ Real Power-up)
 - **Description:** Reasoning frameworks Claude applies directly
@@ -56,16 +57,18 @@ This document provides comprehensive testing instructions for the Phase 0 Skill 
 ### PROCESSOR (✅ Real Power-up)
 - **Description:** Processing/analysis logic Claude executes
 - **Max Utility:** 9/10
-- **Examples:** "query analyzer", "text classifier", "contradiction detector", "motion generator"
-- **Indicators:** analyzer, detector, scorer, classifier, processor, generator
+- **Examples:** "query analyzer", "contradiction detector", "web researcher", "fact checker", "data analyzer"
+- **Indicators:** analyzer, detector, researcher, checker, processor, generator
 - **Claude Gains:** New capability to analyze/process
+- **Note:** Web research, fact-checking, data analysis are PROCESSOR (Claude has web search capability)
 
 ### EXECUTOR (❌ Not a Power-up)
-- **Description:** External automation (not Claude thinking)
+- **Description:** External automation that Claude Code cannot perform
 - **Max Utility:** 2/10
-- **Examples:** "database runner", "deployment automator", "CI/CD executor"
-- **Indicators:** runner, executor, automation, deployment, runs code
-- **Claude Gains:** Nothing (Claude can't execute)
+- **Examples:** "CI/CD pipeline", "cloud deployment automator", "database migration runner"
+- **Indicators:** deployment, CI/CD, database operations, cloud automation, infrastructure
+- **Claude Gains:** Nothing (requires external systems Claude Code doesn't control)
+- **Key Test:** Can Claude Code execute this? If NO (requires external infrastructure) → EXECUTOR
 
 ## Routing Logic
 
@@ -83,7 +86,7 @@ This document provides comprehensive testing instructions for the Phase 0 Skill 
 
 ## Test Cases
 
-### Test Case 1: Web Researcher (TEMPLATE)
+### Test Case 1: Web Researcher (PROCESSOR) - CORRECTED
 
 **Input:**
 ```
@@ -91,19 +94,53 @@ web researcher
 ```
 
 **Expected Behavior:**
+1. **Category Detection:** PROCESSOR
+2. **Categorization Reasoning:** "This is a processing skill that leverages Claude's web search capability to research and analyze information"
+3. **Max Utility:** 9/10
+4. **Initial Score:** ~8/10
+5. **Final Score:** 8/10 (no cap needed)
+6. **Category Capped:** NO
+7. **Is Real Power-up:** YES
+8. **Routing:** PROCEED
+
+**UI Display:**
+- ⚙️ PROCESSOR badge (yellow color)
+- ✓ Real Power-up indicator
+- No capping warning
+- No "Why Not a Power-up" section
+
+**Log Output:**
+```
+✓ Category: PROCESSOR
+✓ Real power-up: true
+✓ Max utility for PROCESSOR: 9/10
+```
+
+**Note:** This test case was corrected based on actual Claude capabilities (web search launched March 2025)
+
+---
+
+### Test Case 1b: Web Scraping Templates (TEMPLATE) - TRUE TEMPLATE EXAMPLE
+
+**Input:**
+```
+web scraping code templates and examples
+```
+
+**Expected Behavior:**
 1. **Category Detection:** TEMPLATE
-2. **Categorization Reasoning:** "This appears to be a code generation skill for web scraping/research frameworks. Claude already knows these patterns from training."
+2. **Categorization Reasoning:** "This is a collection of code templates and examples for web scraping - static code snippets that Claude already knows"
 3. **Max Utility:** 3/10
-4. **Initial Score:** ~9/10 (before ceiling)
+4. **Initial Score:** ~5/10
 5. **Final Score:** 3/10 (capped)
-6. **Category Capped:** YES (9 → 3)
+6. **Category Capped:** YES (5 → 3)
 7. **Is Real Power-up:** NO
 8. **Routing:** REJECT → Problem Identifier
 
 **UI Display:**
 - 📄 TEMPLATE badge (red/pink color)
 - ✗ Not a Power-up indicator
-- ⚠️ Score Capped: 9 → 3 warning
+- ⚠️ Score Capped: 5 → 3 warning
 - "Why Not a Power-up" explanation section shown
 
 **Log Output:**
@@ -111,8 +148,10 @@ web researcher
 ✓ Category: TEMPLATE
 ✓ Real power-up: false
 ✓ Max utility for TEMPLATE: 3/10
-⚠️ Applying category ceiling: 9/10 → 3/10 (TEMPLATE max)
+⚠️ Applying category ceiling: 5/10 → 3/10 (TEMPLATE max)
 ```
+
+**Note:** This demonstrates a TRUE TEMPLATE (static code examples) versus Test Case 1 which is a PROCESSOR (active web research using Claude's web search capability)
 
 ---
 
@@ -324,16 +363,19 @@ if (finalScore >= 7) {
 
 ## Success Criteria
 
-### Critical Success Metric
+### Critical Success Metric - CORRECTED (October 2025)
 ```
 web-researcher skill request
-Before: 9/10 HIGH_UTILITY (WRONG)
-After: 2-3/10 LOW_UTILITY (CORRECT)
-Reason: TEMPLATE category, not a power-up
+Before fix: Would incorrectly categorize as TEMPLATE (based on false assumption)
+After fix: 8/10 HIGH_UTILITY PROCESSOR (CORRECT)
+Reason: PROCESSOR category - Claude HAS web search capability
 ```
 
+**Note:** Previous version incorrectly assumed Claude had no web access. This has been
+corrected based on actual Claude capabilities (web search launched March 2025).
+
 ### All Test Cases Must Pass
-- ✅ Test Case 1: Web Researcher → TEMPLATE, 2-3/10, REJECT
+- ✅ Test Case 1: Web Researcher → PROCESSOR, 8/10, PROCEED (CORRECTED)
 - ✅ Test Case 2: Research Methodology → METHODOLOGY, 8-9/10, PROCEED
 - ✅ Test Case 3: N+1 Query Analyzer → PROCESSOR, 8-9/10, PROCEED
 - ✅ Test Case 4: Deployment Automator → EXECUTOR, 2/10, REJECT
