@@ -2624,6 +2624,93 @@ Return ONLY the JSON object, no markdown, no other text.`;
     // AUTO-VALIDATION & SELF-REDESIGN LOOP
     // ============================================================
 
+    // Helper: Parse YAML metadata string into flat object for validation
+    function parseMetadataYAML(yamlString) {
+      const obj = {};
+      const lines = yamlString.split('\n');
+      let inMetadataSection = false;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+
+        if (trimmed === 'metadata:') {
+          inMetadataSection = true;
+          continue;
+        }
+
+        // Parse root-level fields (name, description)
+        if (!inMetadataSection) {
+          const match = trimmed.match(/^([a-z-]+):\s*"?(.+?)"?$/);
+          if (match) {
+            const key = match[1];
+            let value = match[2];
+            // Remove quotes if present
+            if (value.startsWith('"') && value.endsWith('"')) {
+              value = value.slice(1, -1);
+            }
+            obj[key] = value;
+          }
+        } else {
+          // Parse nested metadata fields (version, complexity, etc.)
+          const match = trimmed.match(/^([a-z-]+):\s*"?(.+?)"?$/);
+          if (match) {
+            const key = match[1];
+            let value = match[2];
+            // Remove quotes if present
+            if (value.startsWith('"') && value.endsWith('"')) {
+              value = value.slice(1, -1);
+            }
+            obj[key] = value;
+          }
+        }
+      }
+
+      return obj;
+    }
+
+    // Helper: Convert flat metadata object back to YAML string
+    function metadataObjectToYAML(obj) {
+      // Separate root-level and metadata fields
+      const rootFields = ['name', 'description', 'license', 'allowed-tools'];
+      const metadataFields = ['version', 'complexity', 'author', 'constraints', 'tags'];
+
+      const lines = [];
+
+      // Add root-level fields
+      if (obj.name) {
+        lines.push(`name: ${obj.name}`);
+      }
+      if (obj.description) {
+        const safeDesc = sanitizeForYAML(obj.description);
+        lines.push(`description: "${safeDesc}"`);
+      }
+      if (obj.license) {
+        lines.push(`license: ${obj.license}`);
+      }
+      if (obj['allowed-tools']) {
+        lines.push(`allowed-tools: ${obj['allowed-tools']}`);
+      }
+
+      // Add metadata section
+      const metadataEntries = {};
+      for (const field of metadataFields) {
+        if (obj[field]) {
+          metadataEntries[field] = obj[field];
+        }
+      }
+
+      if (Object.keys(metadataEntries).length > 0) {
+        lines.push('metadata:');
+        for (const [key, value] of Object.entries(metadataEntries)) {
+          const safeValue = sanitizeForYAML(String(value));
+          lines.push(`  ${key}: "${safeValue}"`);
+        }
+      }
+
+      return lines.join('\n');
+    }
+
     const SKILL_VALIDATION_RULES = {
       power_up_honest: {
         name: 'Power-up Honesty',
@@ -3080,10 +3167,13 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
     async function generateWithAutoValidation(requirements, research) {
       addLog('Starting generation with auto-validation loop...', 'info');
 
-      // Initial generation
-      let metadata = await generateMetadata(requirements, research);
-      let documentation = await generateDocumentation(requirements, research, metadata);
-      let skillPackage = { metadata, documentation, requirements };
+      // Initial generation (returns YAML string)
+      let metadataYAML = await generateMetadata(requirements, research);
+      let documentation = await generateDocumentation(requirements, research, metadataYAML);
+
+      // Parse YAML metadata into object for validation
+      let metadataObj = parseMetadataYAML(metadataYAML);
+      let skillPackage = { metadata: metadataObj, documentation, requirements };
 
       // Validation loop
       const maxAttempts = 3;
@@ -3102,6 +3192,10 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
 
         if (validation.allPass) {
           addLog('🎉 All validation checks passed! Skill is production-ready.', 'success');
+
+          // Convert metadata object back to YAML string for packaging
+          skillPackage.metadata = metadataObjectToYAML(skillPackage.metadata);
+
           return {
             status: 'production_ready',
             skillPackage,
@@ -3132,6 +3226,10 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
 
         if (!fixedAny) {
           addLog('No fixes could be applied. Proceeding with current version.', 'warning');
+
+          // Convert metadata object back to YAML string for packaging
+          skillPackage.metadata = metadataObjectToYAML(skillPackage.metadata);
+
           return {
             status: 'partially_validated',
             skillPackage,
@@ -3143,6 +3241,10 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
 
       // Max attempts reached
       addLog(`⚠️ Reached maximum validation attempts (${maxAttempts}). Proceeding with best version.`, 'warning');
+
+      // Convert metadata object back to YAML string for packaging
+      skillPackage.metadata = metadataObjectToYAML(skillPackage.metadata);
+
       return {
         status: 'max_attempts_reached',
         skillPackage,
