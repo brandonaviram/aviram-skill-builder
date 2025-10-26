@@ -1452,12 +1452,13 @@ Return ONLY valid JSON (no markdown, no extra text):
 
 DEFINITION GUIDE:
 
-TEMPLATE: Code generation tools for humans to implement
-- Claude does: Recommend code templates
-- Claude gains: Nothing (already knows these patterns)
-- Examples: "web scraping framework", "API client generator", "boilerplate generator"
+TEMPLATE: Code templates/examples for humans to implement
+- Claude does: Recommend code patterns
+- Claude gains: Nothing (already knows these patterns from training)
+- Examples: "boilerplate generator", "scaffolding templates", "starter code", "code snippet library"
 - Max utility: 3/10
-- Indicators: "framework", "generator", "templates", "examples", "boilerplate", "scaffolding"
+- Indicators: "templates", "examples", "boilerplate", "scaffolding", "starter", "snippet"
+- Key test: Can Claude USE this itself? If NO (just static code examples) → TEMPLATE
 
 METHODOLOGY: Reasoning frameworks Claude applies directly
 - Claude does: Use reasoning process
@@ -1476,26 +1477,39 @@ KNOWLEDGE: Domain knowledge Claude uses in reasoning
 PROCESSOR: Processing/analysis logic Claude executes
 - Claude does: Execute processing/analysis
 - Claude gains: New capability to analyze/process
-- Examples: "query analyzer", "text classifier", "contradiction detector", "motion generator"
+- Examples: "query analyzer", "contradiction detector", "web researcher", "fact checker", "data analyzer"
 - Max utility: 9/10
-- Indicators: "analyzer", "detector", "scorer", "classifier", "processor", "generator"
+- Indicators: "analyzer", "detector", "researcher", "checker", "processor", "generator"
+- IMPORTANT: Web research, fact-checking, data analysis ARE PROCESSOR skills
+  (Claude has web search capability and can execute these tasks)
 
-EXECUTOR: External automation (not Claude thinking)
+EXECUTOR: External automation that Claude Code cannot perform
 - Claude does: Recommend automation scripts
-- Claude gains: Nothing (Claude can't execute)
-- Examples: "database runner", "deployment automator", "CI/CD executor"
+- Claude gains: Nothing (requires external systems/infrastructure Claude Code doesn't control)
+- Examples: "CI/CD pipeline", "cloud deployment automator", "database migration runner"
 - Max utility: 2/10
-- Indicators: "runner", "executor", "automation", "deployment", "runs code"
+- Indicators: "deployment", "CI/CD", "database operations", "cloud automation", "infrastructure"
+- Key test: Can Claude Code execute this? If NO (requires external systems) → EXECUTOR
 
-CRITICAL: Be strict about categorization.
+CRITICAL CAPABILITY FACTS (October 2025):
+✓ Claude HAS web search capability (launched March 2025)
+✓ Claude Code CAN execute bash commands locally
+✓ Claude Code CAN read/write files
+✓ Claude Code CAN run scripts and commands
+
+CRITICAL: Be strict about categorization based on ACTUAL capabilities.
 - If unsure between TEMPLATE and METHODOLOGY, ask: "Can Claude apply
   this in reasoning?" If NO → TEMPLATE. If YES → METHODOLOGY.
-- If unsure between PROCESSOR and EXECUTOR, ask: "Does Claude do the
-  thinking?" If YES → PROCESSOR. If NO → EXECUTOR.
+- If unsure between PROCESSOR and EXECUTOR, ask: "Can Claude Code execute
+  this locally?" If YES → PROCESSOR. If NO (needs external infrastructure) → EXECUTOR.
+- Web research/fact-checking skills are PROCESSOR, not TEMPLATE
+  (Claude has web search capability)
 - If skill name contains "generator" or "framework" BUT generates content/logic
   (not just code templates), classify as PROCESSOR not TEMPLATE.
   Example: "physics motion generator" → PROCESSOR (Claude generates motion)
-  Example: "API client framework" → TEMPLATE (just code templates)`;
+  Example: "API client framework" → TEMPLATE (just code templates)
+  Example: "web researcher" → PROCESSOR (Claude has web search)
+  Example: "deploy runner" → EXECUTOR (Claude Code can't deploy to cloud)`;
 
       try {
         let response = await callClaude(prompt, 500);

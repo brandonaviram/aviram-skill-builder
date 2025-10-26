@@ -7,15 +7,22 @@ This document summarizes the implementation of the Phase 0 Skill Categorization 
 ## Problem Solved
 
 **Before Implementation:**
-- Template skills like "web researcher" scored 9/10 HIGH_UTILITY
+- Template skills (static code examples) incorrectly scored HIGH_UTILITY
 - Factory shipped low-value skills that don't genuinely power up Claude
 - No distinction between code templates and real reasoning capabilities
 
-**After Implementation:**
-- Template skills correctly capped at 3/10 LOW_UTILITY
-- Executor skills capped at 2/10 LOW_UTILITY
+**After Implementation (October 2025 - Corrected for Actual Capabilities):**
+- Template skills (static code) correctly capped at 3/10 LOW_UTILITY
+- Executor skills (external infrastructure) capped at 2/10 LOW_UTILITY
 - Real power-ups (METHODOLOGY/KNOWLEDGE/PROCESSOR) can score up to 9/10
+- Web research/fact-checking skills correctly categorized as PROCESSOR (Claude HAS web search)
 - Clear categorization and reasoning visible to users
+
+**Critical Fix:**
+- Previous assumptions about Claude capabilities were WRONG
+- Claude HAS web search capability (launched March 2025)
+- Claude Code CAN execute bash commands locally
+- Categorization now based on ACTUAL capabilities, not assumptions
 
 ## Implementation Details
 
@@ -274,12 +281,15 @@ These logs appear in the generation log panel for transparency.
 | 4 | deployment automator | EXECUTOR | 2 | 6 | 2 | YES | REJECT |
 | 5 | physics motion generator | PROCESSOR | 9 | 8 | 8 | NO | PROCEED |
 
-### Critical Success Metric
+### Critical Success Metric - CORRECTED (October 2025)
 
 **web-researcher request:**
-- **Before:** 9/10 HIGH_UTILITY ❌
-- **After:** 3/10 LOW_UTILITY ✅
-- **Reason:** TEMPLATE category applied, not a power-up
+- **Before fix:** Would incorrectly categorize as TEMPLATE (false assumption) ❌
+- **After fix:** 8/10 HIGH_UTILITY PROCESSOR ✅
+- **Reason:** PROCESSOR category - Claude HAS web search capability
+
+**Note:** Previous version was based on false assumption that Claude had no web access.
+This has been corrected based on actual Claude capabilities (web search launched March 2025).
 
 ## Architecture Decisions
 
@@ -505,20 +515,33 @@ Can be parsed for analytics.
 
 The Phase 0 Categorization Gate successfully addresses the critical issue of template skills scoring HIGH_UTILITY. The implementation:
 
-1. **Correctly identifies** template vs power-up skills
+1. **Correctly identifies** template vs power-up skills based on ACTUAL capabilities
 2. **Enforces ceilings** to prevent inflated scores
 3. **Routes appropriately** based on category + score
 4. **Displays transparently** category and reasoning to users
 5. **Integrates cleanly** with existing gates and flow
 
-**Critical Success Metric Achieved:**
+**Critical Update (October 2025):**
+
+The original implementation was based on **false assumptions** about Claude's capabilities:
+- ❌ Assumed Claude had no web access
+- ❌ Assumed Claude Code couldn't execute commands
+
+**Corrected based on actual capabilities:**
+- ✅ Claude HAS web search capability (launched March 2025)
+- ✅ Claude Code CAN execute bash commands locally
+- ✅ Web research/fact-checking are PROCESSOR skills, not TEMPLATE
+
+**Critical Success Metric (CORRECTED):**
 ```
-web-researcher: 9/10 → 3/10 ✅
-Category: TEMPLATE
-Routing: REJECT → Problem Identifier
+web-researcher: Correctly categorized as PROCESSOR ✅
+Category: PROCESSOR (not TEMPLATE)
+Score: 8/10 (real power-up)
+Routing: PROCEED (not REJECT)
+Reasoning: Leverages Claude's web search capability
 ```
 
-The factory now ships genuinely valuable skills that power up Claude, not just organized documentation.
+The factory now ships genuinely valuable skills that power up Claude, including skills that leverage Claude's actual web search and execution capabilities.
 
 ## References
 
@@ -526,9 +549,13 @@ The factory now ships genuinely valuable skills that power up Claude, not just o
 - Phase 0 Architecture Redesign Document
 - PHASE_0_CATEGORIZATION_TESTING.md (testing guide)
 - CONSTRAINT_VALIDATION_TESTING.md (existing gate tests)
+- **CAPABILITY_CATEGORIZATION_FIX.md** (October 2025 capability correction)
 
 ## Contact
 
 Implementation by: Claude Code
 Date: 2025-10-25
 Branch: `claude/skill-categorization-gate-011CUUjgD6obBYwWzBx2xaaY`
+
+**Capability Fix Applied:** 2025-10-26
+Branch: `claude/fix-capability-categorization-011CUUsXWtoWn4xs6v5xz7Wy`
