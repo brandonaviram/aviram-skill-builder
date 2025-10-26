@@ -64,7 +64,7 @@ export default async function handler(req, res) {
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: "claude-haiku-4-20250514",
+          model: "claude-3-5-haiku-latest",
           max_tokens: maxTokens,
           messages: [{ role: "user", content: prompt }]
         })
