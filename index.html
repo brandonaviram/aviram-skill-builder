@@ -4237,7 +4237,14 @@ When the user asks questions or requests tasks related to the topics covered in 
       }, 2000);
     }
 
+    function isMobileDevice() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    }
+
     function showCopyFallback(text) {
+      const isMobile = isMobileDevice();
+
       // Create a temporary textarea for fallback copying
       const textarea = document.createElement('textarea');
       textarea.value = text;
@@ -4256,20 +4263,247 @@ When the user asks questions or requests tasks related to the topics covered in 
       textarea.focus();
       textarea.select();
 
+      // Try to set selection range for better mobile support
+      try {
+        textarea.setSelectionRange(0, textarea.value.length);
+      } catch (e) {
+        // Some browsers don't support this
+      }
+
       try {
         const successful = document.execCommand('copy');
         if (successful) {
           showCopySuccess();
           addLog('Skill prompt copied to clipboard!', 'success');
+          document.body.removeChild(textarea);
         } else {
           throw new Error('Copy command failed');
         }
       } catch (err) {
-        addLog('Please copy the text manually (Ctrl/Cmd+C)', 'warning');
-        alert('Automatic copy failed. Please press Ctrl/Cmd+C to copy the selected text.');
-      } finally {
-        document.body.removeChild(textarea);
+        // Copy failed - show mobile-friendly modal instead of alert
+        if (isMobile) {
+          showMobileCopyModal(text);
+          document.body.removeChild(textarea);
+        } else {
+          // Desktop: keep text selected and show instructions
+          addLog('Please copy the text manually (Ctrl/Cmd+C)', 'warning');
+
+          // Create a modal for manual copying
+          const modal = document.createElement('div');
+          modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+          `;
+
+          const modalContent = document.createElement('div');
+          modalContent.style.cssText = `
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow: auto;
+          `;
+
+          modalContent.innerHTML = `
+            <h3 style="margin-top: 0;">Copy Skill Prompt</h3>
+            <p>Please select the text below and press Ctrl/Cmd+C to copy:</p>
+            <textarea readonly style="width: 100%; height: 300px; padding: 10px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+            <button id="closeModalBtn" style="margin-top: 15px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+          `;
+
+          modal.appendChild(modalContent);
+          document.body.appendChild(modal);
+
+          // Select the text in the modal
+          const modalTextarea = modalContent.querySelector('textarea');
+          modalTextarea.select();
+
+          // Close modal on button click
+          modalContent.querySelector('#closeModalBtn').addEventListener('click', () => {
+            document.body.removeChild(modal);
+          });
+
+          // Close modal on backdrop click
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+              document.body.removeChild(modal);
+            }
+          });
+
+          // Remove the hidden textarea
+          document.body.removeChild(textarea);
+        }
       }
+    }
+
+    function showMobileCopyModal(text) {
+      addLog('Opening copy dialog for mobile...', 'info');
+
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+      `;
+
+      const modalContent = document.createElement('div');
+      modalContent.style.cssText = `
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      `;
+
+      const header = document.createElement('h3');
+      header.style.marginTop = '0';
+      header.style.marginBottom = '10px';
+      header.textContent = 'Copy Skill Prompt';
+
+      const instructions = document.createElement('p');
+      instructions.style.marginBottom = '15px';
+      instructions.innerHTML = '<strong>Tap and hold</strong> the text below, then select "Copy" from the menu:';
+
+      const textareaWrapper = document.createElement('div');
+      textareaWrapper.style.flex = '1';
+      textareaWrapper.style.overflow = 'auto';
+      textareaWrapper.style.marginBottom = '15px';
+
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.readOnly = true;
+      textarea.style.cssText = `
+        width: 100%;
+        height: 300px;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 14px;
+        border: 2px solid #667eea;
+        border-radius: 4px;
+        resize: none;
+        -webkit-user-select: text;
+        user-select: text;
+      `;
+
+      textareaWrapper.appendChild(textarea);
+
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = `
+        display: flex;
+        gap: 10px;
+      `;
+
+      const tryAgainBtn = document.createElement('button');
+      tryAgainBtn.textContent = 'Try Auto-Copy';
+      tryAgainBtn.style.cssText = `
+        flex: 1;
+        padding: 12px 20px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+      `;
+
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = 'Close';
+      closeBtn.style.cssText = `
+        flex: 1;
+        padding: 12px 20px;
+        background: #e0e0e0;
+        color: #333;
+        border: none;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+      `;
+
+      buttonContainer.appendChild(tryAgainBtn);
+      buttonContainer.appendChild(closeBtn);
+
+      modalContent.appendChild(header);
+      modalContent.appendChild(instructions);
+      modalContent.appendChild(textareaWrapper);
+      modalContent.appendChild(buttonContainer);
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+
+      // Focus and select the textarea
+      setTimeout(() => {
+        textarea.focus();
+        textarea.select();
+        try {
+          textarea.setSelectionRange(0, textarea.value.length);
+        } catch (e) {
+          // Ignore
+        }
+      }, 100);
+
+      // Try auto-copy button
+      tryAgainBtn.addEventListener('click', async () => {
+        try {
+          // Try modern clipboard API
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            addLog('Copied to clipboard!', 'success');
+            document.body.removeChild(modal);
+            showCopySuccess();
+            return;
+          }
+
+          // Fallback to execCommand
+          textarea.select();
+          textarea.setSelectionRange(0, textarea.value.length);
+          const successful = document.execCommand('copy');
+          if (successful) {
+            addLog('Copied to clipboard!', 'success');
+            document.body.removeChild(modal);
+            showCopySuccess();
+          } else {
+            addLog('Auto-copy failed. Please copy manually.', 'warning');
+            instructions.innerHTML = '<strong style="color: #e53e3e;">Auto-copy failed.</strong> Please tap and hold the text, then select "Copy":';
+          }
+        } catch (err) {
+          addLog('Auto-copy failed. Please copy manually.', 'warning');
+          instructions.innerHTML = '<strong style="color: #e53e3e;">Auto-copy failed.</strong> Please tap and hold the text, then select "Copy":';
+        }
+      });
+
+      // Close button
+      closeBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+      });
+
+      // Close on backdrop click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
     }
 
     function resetFactory() {
