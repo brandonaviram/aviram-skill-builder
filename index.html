@@ -3673,27 +3673,70 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
           0
         );
 
-        // Store test results in package
-        generatedSkillData = {
-          package: pkg.content,
-          filename: pkg.filename,
-          tree: pkg.tree,
-          validation,
-          testResults: testResults,
-          iterationResult: iterationResult
+        // Use the final skill from iteration result (may be refined)
+        const finalSkill = iterationResult.finalSkill || skillPackage;
+        const finalTestResults = iterationResult.testResults || testResults;
+
+        // Build comprehensive metadata
+        const skillMetadata = {
+          skill_name: currentRequirements.skill_name,
+          description: currentRequirements.description,
+          created: new Date().toISOString(),
+          viability_score: currentRequirements.viability_check?.viability_score || 0,
+          test_pass_rate: finalTestResults.passRate,
+          tests_passed: finalTestResults.passedTests,
+          tests_total: finalTestResults.totalTests,
+          iterations: iterationResult.iterations || 0,
+          status: iterationResult.status,
+          research_sources: research.domainKnowledge ?
+            Object.values(research.domainKnowledge)
+              .flatMap(r => r.sources || [])
+              .filter(s => s && s !== 'web-research') : [],
+          resources: {
+            scripts: resourceData ? Object.keys(resourceData.resources.scripts) : [],
+            references: resourceData ? Object.keys(resourceData.resources.references) : [],
+            assets: resourceData ? Object.keys(resourceData.resources.assets) : []
+          }
         };
 
-        // Update validation with test results
-        validation.testPassRate = `${(testResults.passRate * 100).toFixed(0)}%`;
-        validation.testsPassed = `${testResults.passedTests}/${testResults.totalTests}`;
+        // Re-package with final skill and metadata
+        const finalPkg = await packageSkill(
+          finalSkill,
+          currentRequirements.skill_name,
+          resourceData,
+          skillMetadata
+        );
 
-        showResults(validation, pkg.tree, pkg.filename);
+        // Store test results in package
+        generatedSkillData = {
+          package: finalPkg.content,
+          filename: finalPkg.filename,
+          tree: finalPkg.tree,
+          validation,
+          testResults: finalTestResults,
+          iterationResult: iterationResult,
+          metadata: skillMetadata
+        };
+
+        // Add to skill registry
+        addToSkillRegistry(skillMetadata);
+
+        // Update validation with test results
+        validation.testPassRate = `${(finalTestResults.passRate * 100).toFixed(0)}%`;
+        validation.testsPassed = `${finalTestResults.passedTests}/${finalTestResults.totalTests}`;
+        validation.iterations = iterationResult.iterations || 0;
+
+        showResults(validation, finalPkg.tree, finalPkg.filename);
         addLog('🎉 Skill generation complete!', 'success');
 
-        if (testResults.passRate < 0.8) {
-          addLog(`⚠️ Note: Skill passed ${testResults.passedTests}/${testResults.totalTests} tests. Consider refining.`, 'warning');
+        if (finalTestResults.passRate < 0.8) {
+          addLog(`⚠️ Note: Skill passed ${finalTestResults.passedTests}/${finalTestResults.totalTests} tests. Consider refining.`, 'warning');
         } else {
-          addLog(`✓ Quality validated: ${testResults.passedTests}/${testResults.totalTests} tests passed`, 'success');
+          addLog(`✓ Quality validated: ${finalTestResults.passedTests}/${finalTestResults.totalTests} tests passed`, 'success');
+        }
+
+        if (iterationResult.iterations > 0) {
+          addLog(`🔄 Completed ${iterationResult.iterations} iteration(s) to improve quality`, 'info');
         }
 
       } catch (err) {
@@ -4050,7 +4093,7 @@ Keep under 500 lines. Be specific, practical, and honest about constraints.`;
       return validation;
     }
 
-    async function packageSkill(skillPackage, skillName, resourceData) {
+    async function packageSkill(skillPackage, skillName, resourceData, skillMetadata = null) {
       addLog('Creating skill package...', 'info');
       updateProgress('Package', 30, 'Initializing ZIP...');
 
@@ -4061,6 +4104,13 @@ Keep under 500 lines. Be specific, practical, and honest about constraints.`;
       const skillMd = `---\n${skillPackage.metadata}\n---\n\n${skillPackage.documentation}`;
       skillFolder.file('SKILL.md', skillMd);
       addLog('Added SKILL.md', 'success');
+
+      // Add metadata tracking file if provided
+      if (skillMetadata) {
+        const metadataJson = JSON.stringify(skillMetadata, null, 2);
+        skillFolder.file('metadata.json', metadataJson);
+        addLog('Added metadata.json', 'success');
+      }
 
       // Add resources if available
       if (resourceData) {
@@ -4109,7 +4159,7 @@ This is a Claude Code Skill package.
 
 ## Contents
 
-- \`SKILL.md\` - Main skill documentation${resourceData && Object.keys(resourceData.resources.scripts).length > 0 ? '\n- \`scripts/\` - Helper scripts for deterministic operations' : ''}${resourceData && Object.keys(resourceData.resources.references).length > 0 ? '\n- \`references/\` - Reference documentation and examples' : ''}${resourceData && Object.keys(resourceData.resources.assets).length > 0 ? '\n- \`assets/\` - Templates and assets' : ''}
+- \`SKILL.md\` - Main skill documentation${skillMetadata ? '\n- \`metadata.json\` - Generation metadata (sources, test results, iterations)' : ''}${resourceData && Object.keys(resourceData.resources.scripts).length > 0 ? '\n- \`scripts/\` - Helper scripts for deterministic operations' : ''}${resourceData && Object.keys(resourceData.resources.references).length > 0 ? '\n- \`references/\` - Reference documentation and examples' : ''}${resourceData && Object.keys(resourceData.resources.assets).length > 0 ? '\n- \`assets/\` - Templates and assets' : ''}
 
 ## Usage
 
@@ -4134,6 +4184,15 @@ This skill will be automatically loaded by Claude Code when relevant.
         { name: 'SKILL.md', type: 'file', size: skillMd.length },
         { name: 'README.md', type: 'file', size: readme.length }
       ];
+
+      // Add metadata.json to tree if present
+      if (skillMetadata) {
+        treeChildren.push({
+          name: 'metadata.json',
+          type: 'file',
+          size: JSON.stringify(skillMetadata).length
+        });
+      }
 
       if (resourceData) {
         if (resourceData.resources.scripts && Object.keys(resourceData.resources.scripts).length > 0) {
@@ -4185,20 +4244,56 @@ This skill will be automatically loaded by Claude Code when relevant.
     // ============================================
 
     async function performWebResearch(queries) {
-      // NOTE: This is a placeholder for web research functionality
-      // In production, this would use actual web search APIs
-      addLog('Web research capability (placeholder - would use web_search tool)', 'info');
+      addLog('Performing web research with Claude...', 'info');
 
       const results = {};
-      for (const query of queries) {
+
+      // Limit to top 2 queries to avoid excessive API calls
+      const topQueries = queries.slice(0, 2);
+
+      for (const query of topQueries) {
         addLog(`Researching: ${query}`, 'info');
-        // In production: const searchResults = await webSearch(query);
-        results[query] = {
-          findings: `Research findings for: ${query} (placeholder)`,
-          sources: ['https://example.com/source1', 'https://example.com/source2'],
-          verified: true,
-          note: 'In production, this would contain real web search results'
-        };
+
+        try {
+          const prompt = `Search the web and provide a concise research summary for: "${query}"
+
+Return your findings in this JSON format (no markdown, just JSON):
+{
+  "findings": "2-3 sentence summary of key information found",
+  "sources": ["source1.com", "source2.com"],
+  "key_points": ["point 1", "point 2", "point 3"],
+  "verified": true
+}
+
+Focus on authoritative sources and practical information.`;
+
+          const response = await callClaude(prompt, 800);
+
+          try {
+            const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+            const parsed = JSON.parse(cleaned);
+            results[query] = parsed;
+            addLog(`✓ Research complete: ${query}`, 'success');
+          } catch (parseErr) {
+            // If JSON parsing fails, create a structured response from the text
+            addLog(`Research returned text format for: ${query}`, 'info');
+            results[query] = {
+              findings: response.substring(0, 500),
+              sources: ['web-research'],
+              key_points: ['See findings'],
+              verified: true
+            };
+          }
+        } catch (err) {
+          addLog(`Research failed for "${query}": ${err.message}`, 'warning');
+          results[query] = {
+            findings: `Unable to research: ${query}`,
+            sources: [],
+            key_points: [],
+            verified: false,
+            error: err.message
+          };
+        }
       }
 
       return results;
@@ -4226,13 +4321,85 @@ This skill will be automatically loaded by Claude Code when relevant.
     // Determines if this should be a skill at all
     // ============================================
 
+    // ============================================
+    // SKILL REGISTRY
+    // Local storage for tracking generated skills
+    // ============================================
+
+    const SKILL_REGISTRY_KEY = 'skill_builder_registry';
+
+    function getSkillRegistry() {
+      try {
+        const registry = localStorage.getItem(SKILL_REGISTRY_KEY);
+        return registry ? JSON.parse(registry) : [];
+      } catch (err) {
+        console.error('Failed to load skill registry:', err);
+        return [];
+      }
+    }
+
+    function addToSkillRegistry(skillData) {
+      try {
+        const registry = getSkillRegistry();
+        registry.push({
+          name: skillData.skill_name,
+          description: skillData.description,
+          created: new Date().toISOString(),
+          viability_score: skillData.viability_score,
+          test_pass_rate: skillData.test_pass_rate
+        });
+
+        // Keep only last 50 skills
+        const trimmed = registry.slice(-50);
+        localStorage.setItem(SKILL_REGISTRY_KEY, JSON.stringify(trimmed));
+        addLog(`Added to skill registry: ${skillData.skill_name}`, 'info');
+      } catch (err) {
+        console.error('Failed to save to skill registry:', err);
+      }
+    }
+
+    function clearSkillRegistry() {
+      try {
+        localStorage.removeItem(SKILL_REGISTRY_KEY);
+        addLog('Skill registry cleared', 'success');
+      } catch (err) {
+        console.error('Failed to clear skill registry:', err);
+      }
+    }
+
     async function searchAnthropicSkills(query) {
-      // Placeholder for searching existing skills
-      // In a real implementation, this would search a skill registry
       addLog('Searching for similar existing skills...', 'info');
 
-      // For now, return empty array (could be enhanced with actual skill search)
-      return [];
+      // Get local registry
+      const localSkills = getSkillRegistry();
+
+      // Also search for common/well-known skills via Claude
+      try {
+        const prompt = `List 3-5 common Claude Code skills that are similar to: "${query}"
+
+Return ONLY a JSON array of skill objects (no markdown):
+[
+  {
+    "name": "skill-name",
+    "description": "what it does",
+    "similarity": 0-10
+  }
+]
+
+If no similar skills exist, return an empty array: []`;
+
+        const response = await callClaude(prompt, 500);
+        const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const commonSkills = JSON.parse(cleaned);
+
+        // Combine local and common skills
+        const allSkills = [...localSkills, ...commonSkills];
+        addLog(`Found ${allSkills.length} potentially similar skills`, 'info');
+        return allSkills;
+      } catch (err) {
+        addLog(`Skill search limited to local registry (${localSkills.length} skills)`, 'info');
+        return localSkills;
+      }
     }
 
     function findSimilarSkills(userInput, existingSkills) {
@@ -4712,7 +4879,51 @@ Use the skill to respond to this query.`;
       };
     }
 
-    async function stage8_iterateIfNeeded(skillPackage, testResults, requirements, iterationCount = 0) {
+    async function refineSkillBasedOnFailures(skillPackage, analysis, testResults, requirements) {
+      addLog('Attempting to refine skill based on test failures...', 'info');
+
+      // Build failure context
+      const failureContext = analysis.failureDetails.map(f =>
+        `Query: "${f.query}"\nIssue: ${f.reason}`
+      ).join('\n\n');
+
+      const prompt = `Improve this skill's documentation based on test failures.
+
+CURRENT DOCUMENTATION:
+${skillPackage.documentation}
+
+TEST FAILURES (${testResults.failedTests}/${testResults.totalTests}):
+${failureContext}
+
+IDENTIFIED ISSUES:
+${analysis.recommendations.join('\n')}
+
+INSTRUCTIONS:
+- Fix the issues identified above
+- Make instructions more clear and specific
+- Add concrete examples where needed
+- Ensure proper formatting and structure
+- Do NOT include YAML frontmatter (just the markdown documentation)
+
+Return the IMPROVED documentation (markdown only, no frontmatter):`;
+
+      try {
+        const improvedDocs = await callClaude(prompt, 4000);
+        addLog('✓ Generated improved documentation', 'success');
+
+        // Return refined skill package
+        return {
+          metadata: skillPackage.metadata,
+          documentation: improvedDocs,
+          requirements: skillPackage.requirements
+        };
+      } catch (err) {
+        addLog(`Failed to refine skill: ${err.message}`, 'error');
+        return skillPackage; // Return original if refinement fails
+      }
+    }
+
+    async function stage8_iterateIfNeeded(skillPackage, testResults, requirements, iterationCount = 0, research = null) {
       addLog('=== STAGE 8: ITERATION ANALYSIS ===', 'info');
 
       // Check if iteration is needed
@@ -4746,17 +4957,47 @@ Use the skill to respond to this query.`;
         addLog(`Recommendation ${i + 1}: ${rec}`, 'info');
       });
 
-      // For now, we'll return the analysis without actually re-generating
-      // Full implementation would re-generate the skill based on recommendations
-      addLog('⚠ Iteration logic detected issues but auto-refinement not yet implemented', 'warning');
+      // AUTO-REGENERATE: Refine the skill based on failures
+      addLog(`🔄 Iteration ${iterationCount + 1}/3: Attempting auto-refinement...`, 'info');
 
+      const refinedSkill = await refineSkillBasedOnFailures(
+        skillPackage,
+        analysis,
+        testResults,
+        requirements
+      );
+
+      // Re-test the refined skill
+      addLog('Re-testing refined skill...', 'info');
+      const newTestResults = await stage7_testSkill(refinedSkill, requirements);
+
+      // Check if refinement improved the skill
+      if (newTestResults.passRate > testResults.passRate) {
+        addLog(`✓ Improvement: ${(testResults.passRate * 100).toFixed(0)}% → ${(newTestResults.passRate * 100).toFixed(0)}%`, 'success');
+      } else {
+        addLog(`No improvement: ${(testResults.passRate * 100).toFixed(0)}% → ${(newTestResults.passRate * 100).toFixed(0)}%`, 'warning');
+      }
+
+      // Recursively iterate if still below threshold
+      if (newTestResults.passRate < 0.8 && iterationCount + 1 < 3) {
+        addLog('Still below threshold - continuing iteration...', 'info');
+        return await stage8_iterateIfNeeded(
+          refinedSkill,
+          newTestResults,
+          requirements,
+          iterationCount + 1,
+          research
+        );
+      }
+
+      // Return final result
       return {
-        status: 'NEEDS_REFINEMENT',
-        finalSkill: skillPackage,
-        testResults: testResults,
-        iterations: iterationCount,
+        status: newTestResults.passRate >= 0.8 ? 'COMPLETE' : 'NEEDS_REFINEMENT',
+        finalSkill: refinedSkill,
+        testResults: newTestResults,
+        iterations: iterationCount + 1,
         analysis: analysis,
-        recommendation: 'Consider manual refinement based on test failures'
+        improvement: newTestResults.passRate - testResults.passRate
       };
     }
 
