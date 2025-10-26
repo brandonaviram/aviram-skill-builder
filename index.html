@@ -956,6 +956,11 @@ The more texture you give, the sharper the output. But even 'email automation' i
           </div>
 
           <div id="utilityResults">
+            <!-- Category Badge Section -->
+            <div id="categoryBadgeSection" style="margin-bottom: 24px;">
+              <!-- Category badge will be injected here -->
+            </div>
+
             <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
               <div style="flex: 1;">
                 <h3>Utility Score</h3>
@@ -971,6 +976,11 @@ The more texture you give, the sharper the output. But even 'email automation' i
             <div style="margin: 24px 0;">
               <h3>Reasoning</h3>
               <p id="utilityReasoning" style="color: var(--text-secondary); line-height: 1.7;"></p>
+            </div>
+
+            <!-- Category Explanation Section -->
+            <div id="categoryExplanationSection" class="hidden" style="margin: 24px 0;">
+              <!-- Category explanation will be injected here -->
             </div>
 
             <!-- Constraint Validation Report -->
@@ -1404,6 +1414,101 @@ Return ONLY the JSON object, no other text.`;
         return analysis;
       } catch (err) {
         throw new Error(`Utility analysis failed: ${err.message}`);
+      }
+    }
+
+    async function categorizeSkill(skillInput, requirements) {
+      /**
+       * PHASE 0 CATEGORIZATION GATE
+       *
+       * Categorize skill request to determine if it's a real power-up.
+       * This gate prevents template/executor skills from scoring HIGH_UTILITY.
+       *
+       * Categories:
+       * - TEMPLATE: Code generation (NOT power-up, max 3/10)
+       * - METHODOLOGY: Reasoning frameworks (REAL power-up, max 9/10)
+       * - KNOWLEDGE: Domain knowledge (REAL power-up, max 9/10)
+       * - PROCESSOR: Processing/analysis logic (REAL power-up, max 9/10)
+       * - EXECUTOR: External automation (NOT power-up, max 2/10)
+       */
+      addLog('Categorizing skill type...', 'info');
+
+      const prompt = `Categorize this skill request. The category determines the maximum
+utility score and whether it's a real power-up for Claude.
+
+Skill request: ${skillInput}
+Skill name: ${requirements.skill_name}
+Description: ${requirements.description}
+
+Return ONLY valid JSON (no markdown, no extra text):
+{
+  "category": "TEMPLATE|METHODOLOGY|KNOWLEDGE|PROCESSOR|EXECUTOR",
+  "category_reasoning": "why this category",
+  "is_real_power_up": boolean,
+  "max_utility_score": integer (0-10),
+  "power_up_description": "if true, what new capability Claude gains",
+  "indicators_found": ["list of words/phrases that indicated category"]
+}
+
+DEFINITION GUIDE:
+
+TEMPLATE: Code generation tools for humans to implement
+- Claude does: Recommend code templates
+- Claude gains: Nothing (already knows these patterns)
+- Examples: "web scraping framework", "API client generator", "boilerplate generator"
+- Max utility: 3/10
+- Indicators: "framework", "generator", "templates", "examples", "boilerplate", "scaffolding"
+
+METHODOLOGY: Reasoning frameworks Claude applies directly
+- Claude does: Use reasoning process
+- Claude gains: New way of thinking about problems
+- Examples: "contradiction detector", "research methodology", "verification framework"
+- Max utility: 9/10
+- Indicators: "methodology", "framework for thinking", "systematic approach", "process"
+
+KNOWLEDGE: Domain knowledge Claude uses in reasoning
+- Claude does: Apply knowledge in analysis
+- Claude gains: New domain expertise
+- Examples: "constraint patterns", "best practices", "optimization algorithms"
+- Max utility: 9/10
+- Indicators: "patterns", "rules", "algorithms", "best practices", "knowledge base"
+
+PROCESSOR: Processing/analysis logic Claude executes
+- Claude does: Execute processing/analysis
+- Claude gains: New capability to analyze/process
+- Examples: "query analyzer", "text classifier", "contradiction detector", "motion generator"
+- Max utility: 9/10
+- Indicators: "analyzer", "detector", "scorer", "classifier", "processor", "generator"
+
+EXECUTOR: External automation (not Claude thinking)
+- Claude does: Recommend automation scripts
+- Claude gains: Nothing (Claude can't execute)
+- Examples: "database runner", "deployment automator", "CI/CD executor"
+- Max utility: 2/10
+- Indicators: "runner", "executor", "automation", "deployment", "runs code"
+
+CRITICAL: Be strict about categorization.
+- If unsure between TEMPLATE and METHODOLOGY, ask: "Can Claude apply
+  this in reasoning?" If NO → TEMPLATE. If YES → METHODOLOGY.
+- If unsure between PROCESSOR and EXECUTOR, ask: "Does Claude do the
+  thinking?" If YES → PROCESSOR. If NO → EXECUTOR.
+- If skill name contains "generator" or "framework" BUT generates content/logic
+  (not just code templates), classify as PROCESSOR not TEMPLATE.
+  Example: "physics motion generator" → PROCESSOR (Claude generates motion)
+  Example: "API client framework" → TEMPLATE (just code templates)`;
+
+      try {
+        let response = await callClaude(prompt, 500);
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const categorization = JSON.parse(response);
+
+        addLog(`✓ Category: ${categorization.category}`, 'info');
+        addLog(`✓ Real power-up: ${categorization.is_real_power_up}`, 'info');
+        addLog(`✓ Max utility for ${categorization.category}: ${categorization.max_utility_score}/10`, 'info');
+
+        return categorization;
+      } catch (err) {
+        throw new Error(`Categorization failed: ${err.message}`);
       }
     }
 
@@ -2124,6 +2229,68 @@ Return ONLY the JSON object, no markdown, no other text.`;
     async function showUtilityResults(analysis, validationResult = null) {
       document.getElementById('utilityCard').classList.remove('hidden');
 
+      // Display category badge and explanation
+      const categoryBadgeSection = document.getElementById('categoryBadgeSection');
+      const categoryExplanationSection = document.getElementById('categoryExplanationSection');
+
+      if (analysis.skill_category) {
+        // Category color and icon mapping
+        const categoryConfig = {
+          'TEMPLATE': { color: '#f8b4ae', icon: '📄', label: 'TEMPLATE', powerUp: false },
+          'METHODOLOGY': { color: '#8ab4f8', icon: '🧠', label: 'METHODOLOGY', powerUp: true },
+          'KNOWLEDGE': { color: '#81c995', icon: '📚', label: 'KNOWLEDGE', powerUp: true },
+          'PROCESSOR': { color: '#fdd663', icon: '⚙️', label: 'PROCESSOR', powerUp: true },
+          'EXECUTOR': { color: '#f8b4ae', icon: '🤖', label: 'EXECUTOR', powerUp: false }
+        };
+
+        const config = categoryConfig[analysis.skill_category] || { color: '#9aa0a6', icon: '❓', label: analysis.skill_category, powerUp: false };
+
+        // Display category badge
+        categoryBadgeSection.innerHTML = `
+          <div style="background: rgba(${config.powerUp ? '138, 180, 248' : '248, 180, 174'}, 0.1); border: 1px solid ${config.color}; border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 32px;">${config.icon}</div>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+                <span style="background: ${config.color}; color: #0a0b0d; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px;">
+                  ${config.label}
+                </span>
+                ${analysis.is_real_power_up ?
+                  '<span style="color: var(--accent-secondary); font-weight: 600; font-size: 13px;">✓ Real Power-up</span>' :
+                  '<span style="color: #f8b4ae; font-weight: 600; font-size: 13px;">✗ Not a Power-up</span>'}
+                ${analysis.category_capped ?
+                  `<span style="color: #fdd663; font-size: 13px; font-weight: 600;">⚠️ Score Capped: ${analysis.original_score} → ${analysis.utility_score}</span>` : ''}
+              </div>
+              <div style="color: var(--text-secondary); font-size: 13px; line-height: 1.5;">
+                ${analysis.category_reasoning}
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Display category explanation
+        const categoryExplanations = {
+          'TEMPLATE': 'This is a template/documentation skill. Claude can already generate this type of code from training data. Maximum utility for template skills: 3/10',
+          'METHODOLOGY': 'This skill provides a reasoning framework that Claude can apply to analyze and solve problems. Real power-up.',
+          'KNOWLEDGE': 'This skill provides domain knowledge that Claude can use in reasoning and analysis. Real power-up.',
+          'PROCESSOR': 'This skill provides processing/analysis logic that Claude can execute to analyze information. Real power-up.',
+          'EXECUTOR': 'This is an automation script that requires external execution. Claude cannot execute this capability. Maximum utility for executor skills: 2/10'
+        };
+
+        if (!analysis.is_real_power_up) {
+          categoryExplanationSection.classList.remove('hidden');
+          categoryExplanationSection.innerHTML = `
+            <div style="background: rgba(248, 180, 174, 0.08); border-left: 4px solid #f8b4ae; border-radius: 8px; padding: 16px;">
+              <strong style="color: #f8b4ae;">Why Not a Power-up:</strong>
+              <p style="margin: 8px 0 0 0; color: var(--text-secondary); line-height: 1.6;">
+                ${categoryExplanations[analysis.skill_category]}
+              </p>
+            </div>
+          `;
+        } else {
+          categoryExplanationSection.classList.add('hidden');
+        }
+      }
+
       // Display constraint validation report if there were contradictions
       const validationContainer = document.getElementById('constraintValidationReport');
       if (validationResult && validationResult.hasContradictions) {
@@ -2768,6 +2935,48 @@ This skill will be automatically loaded by Claude Code when relevant.
         // Phase 0: Utility Analysis (runs after extraction)
         setStep(2);
         const utilityAnalysis = await analyzeUtility(requirements);
+
+        // NEW: Skill Categorization Gate
+        // Determines if skill is a real power-up and sets max utility ceiling
+        const categorization = await categorizeSkill(input, requirements);
+        const categoryMaxUtility = categorization.max_utility_score;
+        const originalScore = utilityAnalysis.utility_score;
+
+        // Apply category ceiling to utility score
+        if (originalScore > categoryMaxUtility) {
+          addLog(`⚠️ Applying category ceiling: ${originalScore}/10 → ${categoryMaxUtility}/10 (${categorization.category} max)`, 'warning');
+          utilityAnalysis.utility_score = categoryMaxUtility;
+          utilityAnalysis.utility_category = categorizeUtilityScore(categoryMaxUtility);
+          utilityAnalysis.category_capped = true;
+          utilityAnalysis.original_score = originalScore;
+        }
+
+        // Add categorization info to analysis
+        utilityAnalysis.skill_category = categorization.category;
+        utilityAnalysis.category_reasoning = categorization.category_reasoning;
+        utilityAnalysis.is_real_power_up = categorization.is_real_power_up;
+        utilityAnalysis.category_max_utility = categoryMaxUtility;
+        utilityAnalysis.indicators_found = categorization.indicators_found;
+
+        // Update phase_routing based on final score and category
+        const finalScore = utilityAnalysis.utility_score;
+        if (finalScore >= 7) {
+          utilityAnalysis.phase_routing = 'PROCEED';
+        } else if (finalScore >= 4) {
+          // MEDIUM_UTILITY: REDESIGN for TEMPLATE/EXECUTOR, PROCEED for real power-ups
+          if (categorization.category === 'TEMPLATE' || categorization.category === 'EXECUTOR') {
+            utilityAnalysis.phase_routing = 'REDESIGN';
+          } else {
+            utilityAnalysis.phase_routing = 'PROCEED';
+          }
+        } else {
+          // LOW_UTILITY: REJECT for TEMPLATE/EXECUTOR, REDESIGN for others
+          if (categorization.category === 'TEMPLATE' || categorization.category === 'EXECUTOR') {
+            utilityAnalysis.phase_routing = 'REJECT';
+          } else {
+            utilityAnalysis.phase_routing = 'REDESIGN';
+          }
+        }
 
         // NEW: Constraint Validation Gate
         // Validates that power-up claims don't contradict skill's own constraints
