@@ -1422,12 +1422,20 @@ Output your analysis as JSON with these exact fields:
   "utility_category": "HIGH_UTILITY|MEDIUM_UTILITY|LOW_UTILITY",
   "power_up_statement": "This skill powers up Claude by: [specific and testable capability]",
   "reasoning": "Why this scores as high/medium/low",
-  "research_direction": "What to focus on if proceeding",
+  "research_direction": "What to research to make THIS skill excellent (focus on the requested skill, not alternatives)",
   "rejection_reason": "Why rejected (only if LOW_UTILITY)",
   "recommended_redesigns": ["Alternative 1", "Alternative 2", "Alternative 3"],
   "domain": "detected domain",
   "phase_routing": "PROCEED|REDESIGN|REJECT"
 }
+
+IMPORTANT: research_direction should guide research for the REQUESTED skill.
+- If KNOWLEDGE skill: "Find the best [domain] knowledge, principles, patterns to include"
+- If PROCESSOR skill: "Research [domain] processing logic and algorithms"
+- If METHODOLOGY skill: "Find the most effective [domain] methodologies and frameworks"
+- DO NOT use research_direction to suggest pivoting to different skills - that's Problem Identifier's job
+
+recommended_redesigns can suggest alternatives, but research_direction must stay focused on the actual request.
 
 ROUTING RULES:
 - Score 7-10: "PROCEED" (HIGH_UTILITY)
