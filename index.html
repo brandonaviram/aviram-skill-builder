@@ -2604,8 +2604,12 @@ Return ONLY the JSON object, no markdown, no other text.`;
     }
 
     function selectRedesign(redesign) {
+      // Populate input field with suggested skill
       document.getElementById('skillInput').value = redesign;
-      resetFactory();
+
+      // Trigger new factory analysis instead of resetting
+      addLog(`Running analysis for suggested skill: ${redesign}`, 'info');
+      startGeneration();
     }
 
     async function continueToResearch() {
