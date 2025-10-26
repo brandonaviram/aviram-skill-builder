@@ -1157,6 +1157,90 @@ CLAUDE LIMITATIONS:
       }
     };
 
+    const KNOWLEDGE_ENHANCEMENT_PROMPT = `You are a domain research specialist helping create the BEST POSSIBLE knowledge skill for Claude.
+
+Your mission: Transform a generic skill concept into a deeply specialized expertise package.
+
+UNDERSTANDING KNOWLEDGE SKILLS:
+- KNOWLEDGE skills provide domain expertise, frameworks, and specialized know-how
+- They are NOT automation tools, processors, or executors
+- They enhance Claude's reasoning and output quality through structured expertise
+- Value comes from crystallizing expert knowledge into reusable frameworks
+
+RESEARCH PROCESS:
+
+1. DOMAIN DEEP DIVE
+   Investigate the domain thoroughly:
+   - What are the specialized sub-domains and focus areas?
+   - What frameworks and methodologies do experts use?
+   - What techniques differentiate experts from novices?
+   - What mental models and decision-making processes exist?
+   - What common mistakes do practitioners make?
+   - What knowledge is typically learned through years of experience?
+
+2. EXPERTISE SYNTHESIS
+   Identify what would elevate Claude's capabilities:
+   - Core knowledge domains (the "what")
+   - Proven frameworks and methodologies (the "how")
+   - Guiding principles and best practices (the "why")
+   - Domain-specific terminology and concepts
+   - Advanced techniques and expert heuristics
+   - Context that transforms output from good to exceptional
+
+3. ENHANCEMENT STRATEGY
+   Crystallize findings into a focused skill:
+   - What specific expertise areas should this cover?
+   - What frameworks can be systematically applied?
+   - What knowledge gaps would this fill?
+   - What value does this add over Claude's base knowledge?
+   - How does this make Claude's output demonstrably better?
+
+CRITICAL RULES:
+- Stay within the SAME domain (don't pivot to different skill types)
+- Focus on KNOWLEDGE and EXPERTISE (not tools or automation)
+- Be SPECIFIC and SPECIALIZED (not generic templates)
+- Identify FRAMEWORKS that can be systematically applied
+- Crystallize EXPERT-LEVEL insights (not beginner content)
+
+OUTPUT FORMAT (valid JSON only):
+{
+  "enhanced_concept": "specific, focused skill name",
+  "knowledge_domains": [
+    "domain 1 with brief description",
+    "domain 2 with brief description",
+    "domain 3 with brief description"
+  ],
+  "key_frameworks": [
+    "framework 1: what it does",
+    "framework 2: what it does",
+    "framework 3: what it does"
+  ],
+  "expertise_areas": [
+    "advanced technique/concept 1",
+    "advanced technique/concept 2",
+    "advanced technique/concept 3"
+  ],
+  "value_proposition": "Clear statement of how this expertise elevates Claude's capabilities in this domain",
+  "research_summary": "2-3 sentence summary of what you discovered about this domain and why this enhancement matters"
+}
+
+EXAMPLES OF GOOD ENHANCEMENTS:
+
+Generic: "marketing-expert"
+Enhanced: "conversion-psychology-strategist"
+Why: Specific focus on psychological triggers, decision-making heuristics, and behavioral economics in marketing
+
+Generic: "senior-copywriter"
+Enhanced: "strategic-messaging-architect"
+Why: Focus on message hierarchy, audience psychology, brand voice systems, and cross-channel messaging frameworks
+
+Generic: "data-analyst"
+Enhanced: "analytical-storytelling-framework"
+Why: Bridges quantitative analysis with narrative structure, visualization psychology, and insight communication
+
+YOUR TASK:
+Research the provided skill concept deeply, synthesize expert-level knowledge, and output enhanced skill specifications in valid JSON format.`;
+
     // API Key localStorage Management
     function loadApiKey() {
       const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
@@ -1570,6 +1654,35 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
       }
     }
 
+    // ========== FACTORY MODE DETECTION ==========
+    // Determines routing: ENHANCEMENT (knowledge depth), REDESIGN (alternatives), or GENERATE (proceed)
+
+    function determineFactoryMode(skillAnalysis) {
+      const { skill_category, utility_score, is_real_power_up } = skillAnalysis;
+
+      // KNOWLEDGE skills with low utility need enhancement, not alternatives
+      if (skill_category === 'KNOWLEDGE' && utility_score <= 4 && is_real_power_up) {
+        return {
+          mode: 'ENHANCEMENT',
+          reason: 'Generic knowledge concept - needs domain research and depth'
+        };
+      }
+
+      // High utility skills proceed normally
+      if (utility_score >= 7) {
+        return {
+          mode: 'GENERATE',
+          reason: 'Specific skill with clear utility - proceed to generation'
+        };
+      }
+
+      // Low utility non-knowledge skills get alternatives
+      return {
+        mode: 'REDESIGN',
+        reason: 'Low utility - suggest alternative approaches'
+      };
+    }
+
     // ========== DOMAIN EXTRACTION & VALIDATION ==========
     // Prevents domain pivoting bug by extracting practitioners and validating suggestions
 
@@ -1883,6 +1996,54 @@ Return ONLY the JSON object, no markdown, no other text.`;
             measurable_outcome: "Improved workflow efficiency",
             specific_implementation: "Framework-based approach"
           }))
+        };
+      }
+    }
+
+    // ========== KNOWLEDGE ENHANCEMENT ENGINE ==========
+    // Transforms generic KNOWLEDGE skills into specialized expertise
+
+    async function enhanceKnowledgeSkill(skillConcept, domainContext) {
+      addLog('Deploying Knowledge Enhancement Engine...', 'info');
+      updateProgress('Knowledge Enhancement', 30, 'Researching domain expertise...');
+
+      const prompt = `${KNOWLEDGE_ENHANCEMENT_PROMPT}
+
+SKILL CONCEPT: ${skillConcept}
+DOMAIN CONTEXT: ${domainContext || 'Not specified - infer from skill name'}
+
+Begin your research and synthesis.`;
+
+      try {
+        let response = await callClaude(prompt, 4000);
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const enhancement = JSON.parse(response);
+
+        // Validate response structure
+        if (!enhancement.enhanced_concept || !enhancement.knowledge_domains || !enhancement.key_frameworks) {
+          throw new Error('Invalid enhancement structure received');
+        }
+
+        addLog(`✓ Enhanced concept: ${enhancement.enhanced_concept}`, 'success');
+        addLog(`✓ Knowledge domains identified: ${enhancement.knowledge_domains.length}`, 'info');
+        addLog(`✓ Key frameworks discovered: ${enhancement.key_frameworks.length}`, 'info');
+        updateProgress('Knowledge Enhancement', 100, 'Domain research complete');
+
+        return {
+          success: true,
+          enhancedConcept: enhancement.enhanced_concept,
+          knowledgeDomains: enhancement.knowledge_domains,
+          keyFrameworks: enhancement.key_frameworks,
+          expertiseAreas: enhancement.expertise_areas,
+          valueProposition: enhancement.value_proposition,
+          researchSummary: enhancement.research_summary
+        };
+      } catch (err) {
+        addLog('Knowledge enhancement failed - using fallback', 'warning');
+        return {
+          success: false,
+          error: err.message,
+          enhancedConcept: skillConcept
         };
       }
     }
@@ -3326,7 +3487,42 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
       addLog('Starting research pipeline...', 'info');
       updateProgress('Research', 20, 'Researching documentation...');
 
-      const prompt = `Research for creating a Claude Code Skill:
+      // Check if we have knowledge enhancement results
+      const hasEnhancement = utilityAnalysisResult && utilityAnalysisResult.knowledge_enhancement;
+
+      let prompt;
+      if (hasEnhancement) {
+        const enhancement = utilityAnalysisResult.knowledge_enhancement;
+        prompt = `Research for creating an ENHANCED KNOWLEDGE Claude Code Skill:
+
+ORIGINAL CONCEPT: ${requirements.original_skill_name || requirements.skill_name}
+ENHANCED CONCEPT: ${requirements.skill_name}
+
+KNOWLEDGE ENHANCEMENT RESULTS:
+- Enhanced Concept: ${enhancement.enhancedConcept}
+- Value Proposition: ${enhancement.valueProposition}
+- Research Summary: ${enhancement.researchSummary}
+
+KNOWLEDGE DOMAINS TO COVER:
+${enhancement.knowledgeDomains.map(d => `- ${d}`).join('\n')}
+
+KEY FRAMEWORKS TO INCLUDE:
+${enhancement.keyFrameworks.map(f => `- ${f}`).join('\n')}
+
+EXPERTISE AREAS TO DOCUMENT:
+${enhancement.expertiseAreas.map(e => `- ${e}`).join('\n')}
+
+REQUIREMENTS: ${JSON.stringify(requirements, null, 2)}
+
+Provide focused research for implementing this KNOWLEDGE skill (max 1500 tokens):
+1. How to structure the knowledge domains as reusable frameworks
+2. Specific methodologies and techniques to include
+3. Best practices for documenting expert-level insights
+4. How to make this knowledge systematically applicable
+
+Focus on crystallizing the expertise identified in the enhancement research.`;
+      } else {
+        prompt = `Research for creating a Claude Code Skill:
 
 REQUIREMENTS: ${JSON.stringify(requirements, null, 2)}
 
@@ -3337,9 +3533,10 @@ Provide a focused research summary (max 1000 tokens):
 4. Recommended implementation approach
 
 Be specific and actionable.`;
+      }
 
       try {
-        const findings = await callClaude(prompt, 1500);
+        const findings = await callClaude(prompt, hasEnhancement ? 2000 : 1500);
         addLog('Research complete', 'success');
         updateProgress('Research', 100, 'Research synthesis complete');
         return findings;
@@ -3667,7 +3864,35 @@ This skill will be automatically loaded by Claude Code when relevant.
         utilityAnalysis.category_max_utility = categoryMaxUtility;
         utilityAnalysis.indicators_found = categorization.indicators_found;
 
-        // Update phase_routing based on final score and category
+        // NEW: Factory Mode Detection - determines if KNOWLEDGE skill needs enhancement
+        const factoryMode = determineFactoryMode(utilityAnalysis);
+        addLog(`Factory mode: ${factoryMode.mode}`, 'info');
+        addLog(`Reason: ${factoryMode.reason}`, 'info');
+
+        // Store mode for later use
+        utilityAnalysis.factory_mode = factoryMode.mode;
+
+        // If ENHANCEMENT mode, run Knowledge Enhancement Engine
+        if (factoryMode.mode === 'ENHANCEMENT') {
+          const enhancement = await enhanceKnowledgeSkill(
+            requirements.skill_name,
+            utilityAnalysis.power_up_statement
+          );
+
+          if (enhancement.success) {
+            // Store enhancement results for use in research phase
+            utilityAnalysis.knowledge_enhancement = enhancement;
+            // Update the skill name to use the enhanced concept
+            currentRequirements.original_skill_name = requirements.skill_name;
+            currentRequirements.skill_name = enhancement.enhancedConcept;
+            currentRequirements.description = enhancement.valueProposition;
+            addLog(`✓ Skill enhanced: ${enhancement.enhancedConcept}`, 'success');
+          } else {
+            addLog('⚠ Enhancement failed - proceeding with original concept', 'warning');
+          }
+        }
+
+        // Update phase_routing based on final score, category, and factory mode
         const finalScore = utilityAnalysis.utility_score;
         if (finalScore >= 7) {
           utilityAnalysis.phase_routing = 'PROCEED';
@@ -3679,8 +3904,11 @@ This skill will be automatically loaded by Claude Code when relevant.
             utilityAnalysis.phase_routing = 'PROCEED';
           }
         } else {
-          // LOW_UTILITY: REJECT for TEMPLATE/EXECUTOR, REDESIGN for others
-          if (categorization.category === 'TEMPLATE' || categorization.category === 'EXECUTOR') {
+          // LOW_UTILITY: Special handling for ENHANCEMENT mode
+          if (factoryMode.mode === 'ENHANCEMENT') {
+            // KNOWLEDGE skills that were enhanced should proceed to generation
+            utilityAnalysis.phase_routing = 'PROCEED';
+          } else if (categorization.category === 'TEMPLATE' || categorization.category === 'EXECUTOR') {
             utilityAnalysis.phase_routing = 'REJECT';
           } else {
             utilityAnalysis.phase_routing = 'REDESIGN';
