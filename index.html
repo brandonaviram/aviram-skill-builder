@@ -3725,6 +3725,16 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
           skillMetadata
         );
 
+        // Pre-format the prompt for clipboard (to avoid async operations during copy)
+        const skillContent = `---\n${finalSkill.metadata}\n---\n\n${finalSkill.documentation}`;
+        const promptForClipboard = `You are now equipped with the following skill:
+
+---
+${skillContent}
+---
+
+When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
+
         // Store test results in package
         generatedSkillData = {
           package: finalPkg.content,
@@ -3733,7 +3743,8 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
           validation,
           testResults: finalTestResults,
           iterationResult: iterationResult,
-          metadata: skillMetadata
+          metadata: skillMetadata,
+          promptForClipboard: promptForClipboard
         };
 
         // Add to skill registry
@@ -5198,30 +5209,14 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
     }
 
     async function copyPromptToClipboard() {
-      if (!generatedSkillData || !generatedSkillData.package) {
+      if (!generatedSkillData || !generatedSkillData.promptForClipboard) {
         addLog('No skill available to copy', 'error');
         return;
       }
 
       try {
-        // Extract SKILL.md content from the ZIP
-        const zip = await JSZip.loadAsync(generatedSkillData.package);
-        const skillMdFile = Object.keys(zip.files).find(f => f.endsWith('SKILL.md'));
-
-        if (!skillMdFile) {
-          throw new Error('SKILL.md not found in package');
-        }
-
-        const skillContent = await zip.files[skillMdFile].async('text');
-
-        // Format as a prompt
-        const prompt = `You are now equipped with the following skill:
-
----
-${skillContent}
----
-
-When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
+        // Use pre-cached prompt (no async operations to preserve iOS Safari gesture context)
+        const prompt = generatedSkillData.promptForClipboard;
 
         // Try clipboard API
         if (navigator.clipboard && navigator.clipboard.writeText) {
