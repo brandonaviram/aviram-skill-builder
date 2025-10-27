@@ -3381,6 +3381,12 @@ Return ONLY the rewritten description (max 200 chars), nothing else.`;
     async function fixProgressiveDisclosure(skillPackage) {
       addLog('Auto-fixing: Documentation too long, adding structure note...', 'info');
 
+      // Check if progressive disclosure note already exists
+      if (skillPackage.documentation.includes('**Progressive Disclosure:**')) {
+        addLog('✓ Navigation note already exists, skipping', 'success');
+        return skillPackage;
+      }
+
       // Add a progressive disclosure note
       const note = `> **Progressive Disclosure:** This documentation is comprehensive. Use Ctrl+F to find specific sections.\n\n`;
       skillPackage.documentation = note + skillPackage.documentation;
@@ -4568,14 +4574,23 @@ Return ONLY valid JSON (no markdown):
       };
 
       // Check if skill needs executable scripts (deterministic tasks)
-      if (requirements.needs_scripts ||
-          requirements.description.toLowerCase().includes('automat') ||
-          requirements.description.toLowerCase().includes('generat')) {
+      // REFERENCE_CODEGEN skills should NOT generate scripts - they're just documentation
+      // Scripts only make sense for EXECUTOR_INTERNAL (deterministic operations)
+      const shouldGenerateScripts = requirements.skill_category !== 'REFERENCE_CODEGEN' &&
+                                   requirements.skill_category !== 'KNOWLEDGE' &&
+                                   requirements.skill_category !== 'METHODOLOGY' &&
+                                   (requirements.needs_scripts ||
+                                    requirements.description.toLowerCase().includes('automat') ||
+                                    requirements.description.toLowerCase().includes('process'));
+
+      if (shouldGenerateScripts) {
         resourcePlan.scripts.push({
           name: `${requirements.skill_name}-helper.py`,
           purpose: 'Helper script for deterministic operations',
           type: 'python'
         });
+      } else if (requirements.skill_category === 'REFERENCE_CODEGEN') {
+        addLog('ℹ️ Skipping script generation for REFERENCE_CODEGEN skill (documentation only)', 'info');
       }
 
       // Check if skill needs reference documentation
@@ -5089,6 +5104,9 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         utilityAnalysis.is_real_power_up = categorization.is_real_power_up;
         utilityAnalysis.category_max_utility = categoryMaxUtility;
         utilityAnalysis.indicators_found = categorization.indicators_found;
+
+        // Also add category to requirements so it flows through pipeline
+        currentRequirements.skill_category = categorization.category;
 
         // NEW: Factory Mode Detection - determines if KNOWLEDGE skill needs enhancement
         const factoryMode = determineFactoryMode(utilityAnalysis);
