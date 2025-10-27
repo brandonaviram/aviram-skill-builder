@@ -1605,6 +1605,7 @@ Return ONLY the JSON object, no other text.`;
        * - METHODOLOGY: Reasoning frameworks (REAL power-up, max 9/10)
        * - KNOWLEDGE: Domain knowledge (REAL power-up, max 9/10)
        * - PROCESSOR: Processing/analysis logic (REAL power-up, max 9/10)
+       * - REFERENCE_CODEGEN: Documentation/API reference for external tools (REAL power-up, max 9/10)
        * - EXECUTOR: External automation (NOT power-up, max 2/10)
        */
       addLog('Categorizing skill type...', 'info');
@@ -1618,7 +1619,7 @@ Description: ${requirements.description}
 
 Return ONLY valid JSON (no markdown, no extra text):
 {
-  "category": "TEMPLATE|METHODOLOGY|KNOWLEDGE|PROCESSOR|EXECUTOR",
+  "category": "TEMPLATE|METHODOLOGY|KNOWLEDGE|PROCESSOR|REFERENCE_CODEGEN|EXECUTOR",
   "category_reasoning": "why this category",
   "is_real_power_up": boolean,
   "max_utility_score": integer (0-10),
@@ -1659,13 +1660,23 @@ PROCESSOR: Processing/analysis logic Claude executes
 - IMPORTANT: Web research, fact-checking, data analysis ARE PROCESSOR skills
   (Claude has web search capability and can execute these tasks)
 
-EXECUTOR: External automation that Claude Code cannot perform
+REFERENCE_CODEGEN: Documentation/API reference for external tools
+- Claude does: Generate code for external execution
+- Claude gains: Knowledge to produce correct code for external systems/tools
+- Examples: "Hammerspoon API docs", "Docker patterns", "Terraform templates", "Arduino reference", "GitHub Actions workflows"
+- Max utility: 9/10
+- Indicators: "API reference", "documentation", "patterns", "automation framework", "scripting guide"
+- Key distinction: Claude CANNOT execute these tools, but CAN generate correct code/configs for them
+- Use case: User asks Claude to generate code → User executes in external environment
+- IMPORTANT: This is NOT about execution - it's about code generation quality improvement
+
+EXECUTOR: External automation that requires runtime integration
 - Claude does: Recommend automation scripts
-- Claude gains: Nothing (requires external systems/infrastructure Claude Code doesn't control)
-- Examples: "CI/CD pipeline", "cloud deployment automator", "database migration runner"
+- Claude gains: Nothing (requires live external systems with security/safety concerns)
+- Examples: "Live CI/CD pipeline runner", "production cloud deployer", "live database migrator"
 - Max utility: 2/10
-- Indicators: "deployment", "CI/CD", "database operations", "cloud automation", "infrastructure"
-- Key test: Can Claude Code execute this? If NO (requires external systems) → EXECUTOR
+- Indicators: "deployment", "CI/CD runner", "live database operations", "production automation"
+- Key test: Does this require Claude to interact with LIVE external systems? If YES → EXECUTOR
 
 ${CLAUDE_CAPABILITIES.toPromptFormat()}
 
@@ -1673,7 +1684,10 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
 - If unsure between TEMPLATE and METHODOLOGY, ask: "Can Claude apply
   this in reasoning?" If NO → TEMPLATE. If YES → METHODOLOGY.
 - If unsure between PROCESSOR and EXECUTOR, ask: "Can Claude Code execute
-  this locally?" If YES → PROCESSOR. If NO (needs external infrastructure) → EXECUTOR.
+  this locally?" If YES → PROCESSOR. If NO (needs external infrastructure) → check next rule.
+- If unsure between REFERENCE_CODEGEN and EXECUTOR, ask: "Is this documentation/reference
+  for code generation OR does it require runtime integration?"
+  Documentation/API reference → REFERENCE_CODEGEN. Live system integration → EXECUTOR.
 - Web research/fact-checking skills are PROCESSOR, not TEMPLATE
   (Claude has web search capability)
 - If skill name contains "generator" or "framework" BUT generates content/logic
@@ -1681,7 +1695,9 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
   Example: "physics motion generator" → PROCESSOR (Claude generates motion)
   Example: "API client framework" → TEMPLATE (just code templates)
   Example: "web researcher" → PROCESSOR (Claude has web search)
-  Example: "deploy runner" → EXECUTOR (Claude Code can't deploy to cloud)`;
+  Example: "Hammerspoon automation docs" → REFERENCE_CODEGEN (generates code for external execution)
+  Example: "Docker container patterns" → REFERENCE_CODEGEN (generates Docker configs)
+  Example: "live deploy runner" → EXECUTOR (requires runtime integration with live systems)`;
 
       try {
         let response = await callClaude(prompt, 500);
@@ -2658,6 +2674,7 @@ Begin your research and synthesis.`;
           'METHODOLOGY': { color: '#8ab4f8', icon: '🧠', label: 'METHODOLOGY', powerUp: true },
           'KNOWLEDGE': { color: '#81c995', icon: '📚', label: 'KNOWLEDGE', powerUp: true },
           'PROCESSOR': { color: '#fdd663', icon: '⚙️', label: 'PROCESSOR', powerUp: true },
+          'REFERENCE_CODEGEN': { color: '#c58af9', icon: '📖', label: 'REFERENCE_CODEGEN', powerUp: true },
           'EXECUTOR': { color: '#f8b4ae', icon: '🤖', label: 'EXECUTOR', powerUp: false }
         };
 
@@ -2691,6 +2708,7 @@ Begin your research and synthesis.`;
           'METHODOLOGY': 'This skill provides a reasoning framework that Claude can apply to analyze and solve problems. Real power-up.',
           'KNOWLEDGE': 'This skill provides domain knowledge that Claude can use in reasoning and analysis. Real power-up.',
           'PROCESSOR': 'This skill provides processing/analysis logic that Claude can execute to analyze information. Real power-up.',
+          'REFERENCE_CODEGEN': 'This skill provides API reference and documentation for external tools. Claude uses this to generate better code that users execute externally. Real power-up for code generation quality.',
           'EXECUTOR': 'This is an automation script that requires external execution. Claude cannot execute this capability. Maximum utility for executor skills: 2/10'
         };
 
