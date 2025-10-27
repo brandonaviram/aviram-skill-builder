@@ -49,19 +49,40 @@ A beautiful, single-file web application that transforms rough ideas into produc
 ### 6-Stage Generation Pipeline
 
 1. **Input Processing**: Extracts requirements, determines complexity, identifies key features
-2. **Phase 0 - Utility Analysis**:
+2. **Phase 0 - Utility Analysis & Categorization** (v2.1 updated):
    - Evaluates if skill genuinely powers up Claude
+   - **Skill Categorization**: Determines skill type and maximum utility score
    - **Constraint Validation Gate**: Validates power-up claims against skill's own constraints
+   - **NEW**: Executor skills differentiated by execution context (agentic vs external)
    - Prevents false HIGH_UTILITY scores for contradictory capabilities
    - Routes to Research (HIGH), Redesign (MEDIUM), or Rejection (LOW)
 3. **Research**: Conducts focused research on best practices, APIs, and implementation patterns
 4. **Generate with Auto-Validation**: Creates YAML metadata and comprehensive documentation, then:
    - **Auto-validates** against 6 quality rules
+   - **Safety Assessment** (v2.1): Checks executor skills for unsafe patterns
    - **Auto-fixes** common issues (overpromising descriptions, unclear constraints, missing metadata)
    - **Iterates** up to 3 times until production-ready
    - Logs all validation checks and fixes in real-time
 5. **Final Validate**: Ensures YAML compliance, checks quality score, validates structure
 6. **Package**: Bundles everything into a properly formatted ZIP with README
+
+### Skill Categories (v2.1)
+
+The factory categorizes skills to determine their maximum utility score:
+
+- **METHODOLOGY** (max 9/10): Reasoning frameworks Claude applies directly
+- **KNOWLEDGE** (max 9/10): Domain knowledge Claude uses in reasoning
+- **PROCESSOR** (max 9/10): Processing/analysis logic Claude executes
+- **REFERENCE_CODEGEN** (max 9/10): API reference for code generation
+- **EXECUTOR - AGENTIC** (max 6/10): Executable code Claude runs in sandbox (FFmpeg, Python, etc.)
+- **EXECUTOR - EXTERNAL** (max 2/10): Requires external systems Claude cannot control
+- **TEMPLATE** (max 3/10): Code templates Claude already knows
+
+**v2.1 Update**: Executor skills now support two subtypes:
+- **Agentic**: Can run safely in Claude's sandbox (FFmpeg, Python, file operations) → 6/10 max
+- **External**: Requires external systems (Hammerspoon, system daemons, live databases) → 2/10 max
+
+This aligns with Claude's new agentic execution capabilities (Sonnet 4.5, Haiku 4.5).
 
 ### What Gets Generated
 

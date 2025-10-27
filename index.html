@@ -1606,7 +1606,9 @@ Return ONLY the JSON object, no other text.`;
        * - KNOWLEDGE: Domain knowledge (REAL power-up, max 9/10)
        * - PROCESSOR: Processing/analysis logic (REAL power-up, max 9/10)
        * - REFERENCE_CODEGEN: Documentation/API reference for external tools (REAL power-up, max 9/10)
-       * - EXECUTOR: External automation (NOT power-up, max 2/10)
+       * - EXECUTOR (v2.1 UPDATE):
+       *   - AGENTIC subtype: Runs in Claude's sandbox (REAL power-up, max 6/10)
+       *   - EXTERNAL subtype: Requires external systems (NOT power-up, max 2/10)
        */
       addLog('Categorizing skill type...', 'info');
 
@@ -1624,7 +1626,8 @@ Return ONLY valid JSON (no markdown, no extra text):
   "is_real_power_up": boolean,
   "max_utility_score": integer (0-10),
   "power_up_description": "if true, what new capability Claude gains",
-  "indicators_found": ["list of words/phrases that indicated category"]
+  "indicators_found": ["list of words/phrases that indicated category"],
+  "executor_subtype": "agentic|external|null (only for EXECUTOR category)"
 }
 
 DEFINITION GUIDE:
@@ -1670,13 +1673,28 @@ REFERENCE_CODEGEN: Documentation/API reference for external tools
 - Use case: User asks Claude to generate code → User executes in external environment
 - IMPORTANT: This is NOT about execution - it's about code generation quality improvement
 
-EXECUTOR: External automation that requires runtime integration
-- Claude does: Recommend automation scripts
+EXECUTOR: Automation that involves code execution
+- IMPORTANT: EXECUTOR skills now have TWO subtypes with different utility ceilings:
+
+EXECUTOR (AGENTIC subtype): Claude can execute safely in sandbox
+- Claude does: Execute code/tools in sandbox environment
+- Claude gains: New executable capability (can run FFmpeg, Python, file operations, etc.)
+- Examples: "FFmpeg video processor", "Python data pipeline", "image processing with ImageMagick", "file format converter"
+- Max utility: 6/10
+- Indicators: "bash commands", "python script", "file operations", "data processing", "ffmpeg", "imagemagick", "tool orchestration", "sandbox"
+- Key tests:
+  * Can run entirely in Claude's sandbox? YES
+  * Requires no external systems/services? YES
+  * No privileged operations (sudo, system daemons)? YES
+  * If all YES → EXECUTOR (agentic subtype, 6/10)
+
+EXECUTOR (EXTERNAL subtype): Requires systems Claude cannot control
+- Claude does: Recommend automation scripts for external execution
 - Claude gains: Nothing (requires live external systems with security/safety concerns)
-- Examples: "Live CI/CD pipeline runner", "production cloud deployer", "live database migrator"
+- Examples: "Live CI/CD pipeline runner", "Hammerspoon automation", "production cloud deployer", "system daemon controller"
 - Max utility: 2/10
-- Indicators: "deployment", "CI/CD runner", "live database operations", "production automation"
-- Key test: Does this require Claude to interact with LIVE external systems? If YES → EXECUTOR
+- Indicators: "system daemon", "hardware control", "live database", "production deployment", "external service", "privileged access", "hammerspoon", "autohotkey", "systemd", "cron"
+- Key test: Requires external systems, privileged access, or live services? If YES → EXECUTOR (external subtype, 2/10)
 
 ${CLAUDE_CAPABILITIES.toPromptFormat()}
 
@@ -1688,6 +1706,14 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
 - If unsure between REFERENCE_CODEGEN and EXECUTOR, ask: "Is this documentation/reference
   for code generation OR does it require runtime integration?"
   Documentation/API reference → REFERENCE_CODEGEN. Live system integration → EXECUTOR.
+- For EXECUTOR skills, determine subtype:
+  * Can run in Claude's sandbox with no external dependencies? → AGENTIC (6/10 max)
+  * Requires external systems, privileged access, or live services? → EXTERNAL (2/10 max)
+  * Examples:
+    - "FFmpeg video processor" → EXECUTOR (agentic, 6/10)
+    - "Python data pipeline" → EXECUTOR (agentic, 6/10)
+    - "Hammerspoon automation" → EXECUTOR (external, 2/10)
+    - "Live database migrator" → EXECUTOR (external, 2/10)
 - Web research/fact-checking skills are PROCESSOR, not TEMPLATE
   (Claude has web search capability)
 - If skill name contains "generator" or "framework" BUT generates content/logic
@@ -1697,7 +1723,8 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
   Example: "web researcher" → PROCESSOR (Claude has web search)
   Example: "Hammerspoon automation docs" → REFERENCE_CODEGEN (generates code for external execution)
   Example: "Docker container patterns" → REFERENCE_CODEGEN (generates Docker configs)
-  Example: "live deploy runner" → EXECUTOR (requires runtime integration with live systems)`;
+  Example: "live deploy runner" → EXECUTOR (external subtype, requires runtime integration with live systems)
+  Example: "FFmpeg batch processor" → EXECUTOR (agentic subtype, runs in Claude sandbox)`;
 
       try {
         let response = await callClaude(prompt, 500);
@@ -1705,6 +1732,15 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
         const categorization = JSON.parse(response);
 
         addLog(`✓ Category: ${categorization.category}`, 'info');
+        if (categorization.category === 'EXECUTOR' && categorization.executor_subtype) {
+          addLog(`✓ Executor subtype: ${categorization.executor_subtype.toUpperCase()}`, 'info');
+          // Update is_real_power_up based on subtype
+          if (categorization.executor_subtype === 'agentic') {
+            categorization.is_real_power_up = true;
+          } else {
+            categorization.is_real_power_up = false;
+          }
+        }
         addLog(`✓ Real power-up: ${categorization.is_real_power_up}`, 'info');
         addLog(`✓ Max utility for ${categorization.category}: ${categorization.max_utility_score}/10`, 'info');
 
@@ -2675,10 +2711,18 @@ Begin your research and synthesis.`;
           'KNOWLEDGE': { color: '#81c995', icon: '📚', label: 'KNOWLEDGE', powerUp: true },
           'PROCESSOR': { color: '#fdd663', icon: '⚙️', label: 'PROCESSOR', powerUp: true },
           'REFERENCE_CODEGEN': { color: '#c58af9', icon: '📖', label: 'REFERENCE_CODEGEN', powerUp: true },
-          'EXECUTOR': { color: '#f8b4ae', icon: '🤖', label: 'EXECUTOR', powerUp: false }
+          'EXECUTOR': { color: '#f8b4ae', icon: '🤖', label: 'EXECUTOR', powerUp: false },
+          'EXECUTOR_AGENTIC': { color: '#81c995', icon: '🤖', label: 'EXECUTOR (AGENTIC)', powerUp: true },
+          'EXECUTOR_EXTERNAL': { color: '#f8b4ae', icon: '🔗', label: 'EXECUTOR (EXTERNAL)', powerUp: false }
         };
 
-        const config = categoryConfig[analysis.skill_category] || { color: '#9aa0a6', icon: '❓', label: analysis.skill_category, powerUp: false };
+        // Handle executor subtypes
+        let categoryKey = analysis.skill_category;
+        if (analysis.skill_category === 'EXECUTOR' && analysis.executor_subtype) {
+          categoryKey = `EXECUTOR_${analysis.executor_subtype.toUpperCase()}`;
+        }
+
+        const config = categoryConfig[categoryKey] || { color: '#9aa0a6', icon: '❓', label: analysis.skill_category, powerUp: false };
 
         // Display category badge
         categoryBadgeSection.innerHTML = `
@@ -2709,16 +2753,26 @@ Begin your research and synthesis.`;
           'KNOWLEDGE': 'This skill provides domain knowledge that Claude can use in reasoning and analysis. Real power-up.',
           'PROCESSOR': 'This skill provides processing/analysis logic that Claude can execute to analyze information. Real power-up.',
           'REFERENCE_CODEGEN': 'This skill provides API reference and documentation for external tools. Claude uses this to generate better code that users execute externally. Real power-up for code generation quality.',
-          'EXECUTOR': 'This is an automation script that requires external execution. Claude cannot execute this capability. Maximum utility for executor skills: 2/10'
+          'EXECUTOR': 'This is an automation script that requires external execution. Claude cannot execute this capability. Maximum utility for executor skills: 2/10',
+          'EXECUTOR_AGENTIC': 'This skill provides executable capabilities that Claude can run safely in its sandbox environment (e.g., FFmpeg, Python, file operations). Real power-up with agentic execution. Maximum utility: 6/10',
+          'EXECUTOR_EXTERNAL': 'This automation requires external systems or privileged access that Claude cannot control (e.g., system daemons, live databases, Hammerspoon). Maximum utility for external executor skills: 2/10'
         };
 
-        if (!analysis.is_real_power_up) {
+        // Show explanation for non-power-ups OR agentic executors (to explain the new 6/10 ceiling)
+        if (!analysis.is_real_power_up || (analysis.skill_category === 'EXECUTOR' && analysis.executor_subtype === 'agentic')) {
           categoryExplanationSection.classList.remove('hidden');
+          const explanationStyle = analysis.is_real_power_up ?
+            'background: rgba(129, 201, 149, 0.08); border-left: 4px solid #81c995;' :
+            'background: rgba(248, 180, 174, 0.08); border-left: 4px solid #f8b4ae;';
+          const explanationTitle = analysis.is_real_power_up ?
+            `<strong style="color: #81c995;">Agentic Execution Capability:</strong>` :
+            `<strong style="color: #f8b4ae;">Why Not a Power-up:</strong>`;
+
           categoryExplanationSection.innerHTML = `
-            <div style="background: rgba(248, 180, 174, 0.08); border-left: 4px solid #f8b4ae; border-radius: 8px; padding: 16px;">
-              <strong style="color: #f8b4ae;">Why Not a Power-up:</strong>
+            <div style="${explanationStyle} border-radius: 8px; padding: 16px;">
+              ${explanationTitle}
               <p style="margin: 8px 0 0 0; color: var(--text-secondary); line-height: 1.6;">
-                ${categoryExplanations[analysis.skill_category]}
+                ${categoryExplanations[categoryKey]}
               </p>
             </div>
           `;
@@ -3510,6 +3564,82 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
     }
 
     // ============================================================
+    // SAFETY ASSESSMENT (v2.1)
+    // ============================================================
+
+    function assessSkillSafety(skillPackage) {
+      /**
+       * Assesses safety of executor skills for agentic execution
+       * Returns safety level and any warnings/adjustments needed
+       */
+      const assessment = {
+        level: 'safe',
+        utilityAdjustment: 0,
+        warnings: []
+      };
+
+      // Only assess EXECUTOR skills with agentic subtype
+      if (skillPackage.category !== 'EXECUTOR' || skillPackage.executor_subtype !== 'agentic') {
+        return assessment;
+      }
+
+      const codeContent = JSON.stringify(skillPackage.scripts || skillPackage.content || '');
+
+      // Check for unsafe patterns
+      const unsafePatterns = [
+        { pattern: /rm\s+-rf\s+\/(?!tmp|var\/tmp)/gi, desc: 'Dangerous file deletion outside safe directories' },
+        { pattern: /sudo\s+/gi, desc: 'Privileged operations not allowed in sandbox' },
+        { pattern: /eval\s*\(/gi, desc: 'Code injection risk with eval()' },
+        { pattern: /exec\s*\(/gi, desc: 'Arbitrary code execution risk' },
+        { pattern: /connect.*production/gi, desc: 'Production system access not allowed' },
+        { pattern: /--force|--no-verify/gi, desc: 'Bypass safety checks' }
+      ];
+
+      for (const { pattern, desc } of unsafePatterns) {
+        if (pattern.test(codeContent)) {
+          assessment.level = 'unsafe';
+          assessment.utilityAdjustment = -10; // Force rejection
+          assessment.warnings.push(`⚠️ UNSAFE: ${desc}`);
+        }
+      }
+
+      // Check for semi-safe patterns (need extra caution)
+      if (assessment.level === 'safe') {
+        const semiSafePatterns = [
+          { pattern: /api[_\s]*key/gi, desc: 'API key handling - ensure proper secrets management' },
+          { pattern: /password|credential/gi, desc: 'Credential management - ensure secure handling' },
+          { pattern: /DELETE\s+FROM|DROP\s+TABLE/gi, desc: 'Data deletion operations' },
+          { pattern: /\$\(.*\)/g, desc: 'Shell command substitution - verify input sanitization' }
+        ];
+
+        for (const { pattern, desc } of semiSafePatterns) {
+          if (pattern.test(codeContent)) {
+            assessment.level = 'semi-safe';
+            assessment.warnings.push(`⚠️ CAUTION: ${desc}`);
+          }
+        }
+      }
+
+      // Bonus for verified safe sandbox operations
+      if (assessment.level === 'safe') {
+        const safeIndicators = [
+          /ffmpeg\s+-i/gi,
+          /python3?\s+/gi,
+          /imagemagick|convert\s+/gi,
+          /jq\s+/gi,
+          /awk|sed/gi
+        ];
+
+        const hasSafeOps = safeIndicators.some(pattern => pattern.test(codeContent));
+        if (hasSafeOps) {
+          assessment.utilityAdjustment = 1; // Small bonus for verified safe operations
+        }
+      }
+
+      return assessment;
+    }
+
+    // ============================================================
     // VALIDATION LOOP ORCHESTRATION
     // ============================================================
 
@@ -3517,8 +3647,28 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
       const results = {
         allPass: true,
         failures: [],
-        passes: []
+        passes: [],
+        safetyAssessment: null
       };
+
+      // Run safety assessment for executor skills (v2.1)
+      if (skillPackage.category === 'EXECUTOR') {
+        const safety = assessSkillSafety(skillPackage);
+        results.safetyAssessment = safety;
+
+        if (safety.level === 'unsafe') {
+          results.allPass = false;
+          results.failures.push({
+            rule: 'safety_assessment',
+            name: 'Safety Assessment',
+            issue: `Unsafe patterns detected: ${safety.warnings.join(', ')}`,
+            severity: 'high',
+            fixable: false
+          });
+        } else if (safety.level === 'semi-safe') {
+          addLog(`⚠️ Safety warnings: ${safety.warnings.join(', ')}`, 'warning');
+        }
+      }
 
       for (const [ruleKey, rule] of Object.entries(SKILL_VALIDATION_RULES)) {
         const result = rule.check(skillPackage);
