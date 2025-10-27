@@ -49,13 +49,13 @@ A beautiful, single-file web application that transforms rough ideas into produc
 ### 6-Stage Generation Pipeline
 
 1. **Input Processing**: Extracts requirements, determines complexity, identifies key features
-2. **Phase 0 - Utility Analysis & Categorization** (v2.1 updated):
-   - Evaluates if skill genuinely powers up Claude
-   - **Skill Categorization**: Determines skill type and maximum utility score
-   - **Constraint Validation Gate**: Validates power-up claims against skill's own constraints
+2. **Phase 0 - Capability Gain Analysis & Categorization** (v2.1 updated):
+   - Evaluates what new capabilities the skill adds to Claude
+   - **Skill Categorization**: Determines skill type and capability gain level
+   - **Constraint Validation Gate**: Validates capability claims against skill's own constraints
    - **NEW**: Executor skills differentiated by execution context (agentic vs external)
-   - Prevents false HIGH_UTILITY scores for contradictory capabilities
-   - Routes to Research (HIGH), Redesign (MEDIUM), or Rejection (LOW)
+   - Prevents inflated capability scores for contradictory claims
+   - Routes to Research (High Gain), Redesign (Limited Gain), or Rejection (No Gain)
 3. **Research**: Conducts focused research on best practices, APIs, and implementation patterns
 4. **Generate with Auto-Validation**: Creates YAML metadata and comprehensive documentation, then:
    - **Auto-validates** against 6 quality rules
@@ -66,21 +66,23 @@ A beautiful, single-file web application that transforms rough ideas into produc
 5. **Final Validate**: Ensures YAML compliance, checks quality score, validates structure
 6. **Package**: Bundles everything into a properly formatted ZIP with README
 
-### Skill Categories (v2.1)
+### Skill Categories & Capability Gain (v2.1)
 
-The factory categorizes skills to determine their maximum utility score:
+The factory categorizes skills to determine their capability gain level:
 
-- **METHODOLOGY** (max 9/10): Reasoning frameworks Claude applies directly
-- **KNOWLEDGE** (max 9/10): Domain knowledge Claude uses in reasoning
-- **PROCESSOR** (max 9/10): Processing/analysis logic Claude executes
-- **REFERENCE_CODEGEN** (max 9/10): API reference for code generation
-- **EXECUTOR - AGENTIC** (max 6/10): Executable code Claude runs in sandbox (FFmpeg, Python, etc.)
-- **EXECUTOR - EXTERNAL** (max 2/10): Requires external systems Claude cannot control
-- **TEMPLATE** (max 3/10): Code templates Claude already knows
+**What is Capability Gain?** It measures what Claude _itself_ can now do, not how helpful the idea is to you.
 
-**v2.1 Update**: Executor skills now support two subtypes:
-- **Agentic**: Can run safely in Claude's sandbox (FFmpeg, Python, file operations) → 6/10 max
-- **External**: Requires external systems (Hammerspoon, system daemons, live databases) → 2/10 max
+- **METHODOLOGY** (High Gain): Reasoning frameworks Claude applies directly
+- **KNOWLEDGE** (High Gain): Domain expertise Claude uses in analysis
+- **PROCESSOR** (High Gain): Processing/analysis logic Claude executes
+- **REFERENCE_CODEGEN** (High Gain): API reference for better code generation
+- **🟢 Agentic Skill** (Strong Gain): Runs safely inside Claude's environment (data processing, file operations, etc.)
+- **🟠 External Skill** (Limited Gain): Runs on your system (still useful, but doesn't expand Claude's abilities)
+- **TEMPLATE** (Limited Gain): Code templates Claude already knows
+
+**v2.1 Update**: Executor skills now differentiated by execution context:
+- **Agentic Skills**: Run safely in Claude's environment → adds real executable capability
+- **External Skills**: Run on your system → generates useful code, but doesn't expand Claude's own abilities
 
 This aligns with Claude's new agentic execution capabilities (Sonnet 4.5, Haiku 4.5).
 

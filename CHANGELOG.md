@@ -8,26 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] - 2025-10-27
 
 ### Added
-- **Executor Utility Ceiling Revision**: Implemented conditional utility scoring for EXECUTOR skills
-  - AGENTIC subtype: Skills that run in Claude's sandbox (FFmpeg, Python, file operations) now score up to 6/10
-  - EXTERNAL subtype: Skills requiring external systems (Hammerspoon, system daemons) remain capped at 2/10
+- **Executor Capability Framework**: Implemented conditional capability scoring for EXECUTOR skills
+  - AGENTIC subtype: Skills that run in Claude's sandbox → Strong Capability Gain
+  - EXTERNAL subtype: Skills requiring external systems → Limited Capability Gain
 - **Safety Assessment System**: New validation layer for executor skills
   - Detects unsafe patterns (sudo, rm -rf, eval, production access)
   - Flags semi-safe patterns requiring caution (API keys, credentials, data deletion)
   - Awards bonus points for verified safe operations
-- **Enhanced UI Badges**: Executor skills now display subtype-specific badges
-  - 🤖 Green badge for AGENTIC executors (real power-up)
-  - 🔗 Orange badge for EXTERNAL executors (not a power-up)
-  - Explanatory tooltips for each subtype
+- **Enhanced UI with Human-Readable Labels**: Executor skills now display clear, user-friendly badges
+  - 🟢 Green "Agentic Skill" badge (Runs safely here. Strong capability gain.)
+  - 🟠 Orange "External Skill" badge (Runs elsewhere. Limited capability gain.)
+  - Contextual "What is Capability Gain?" explanation card
+  - Explanatory descriptions for each skill type
 
 ### Changed
+- **Terminology Update**: Migrated from "Utility Score" to "Capability Gain" throughout UI and docs
+  - More intuitive for non-technical users
+  - Clearer distinction between "what helps users" vs "what expands Claude"
+  - Human-readable labels: "High Gain", "Strong Gain", "Limited Gain"
 - **Categorization Engine**: Updated `categorizeSkill()` function to detect execution context
   - Added `executor_subtype` field to categorization response
   - Enhanced prompt with agentic vs external detection criteria
-  - Updated category ceiling logic to apply 6/10 or 2/10 based on subtype
-- **UI Display Logic**: Modified `showUtilityResults()` to handle executor subtypes
+  - Updated capability ceiling logic based on subtype
+- **UI Display Logic**: Complete redesign of `showUtilityResults()` for clarity
+  - Human-readable badge labels: "Agentic Skill" and "External Skill"
   - Different color schemes for agentic (green) vs external (orange)
   - Context-aware explanations for each executor type
+  - Added "What is Capability Gain?" info card
 - **Validation Pipeline**: Integrated safety assessment into skill validation
   - Runs automatically for all EXECUTOR category skills
   - Blocks unsafe patterns from passing validation

@@ -1,14 +1,19 @@
-# Skill Categories Guide
+# Skill Categories & Capability Gain Guide
 
 **AVIRAM SKILL FACTORY v2.1**
 
-This document explains how the factory categorizes skills and determines their maximum utility scores.
+This document explains how the factory categorizes skills and determines their capability gain level.
 
 ---
 
 ## Overview
 
-The categorization system ensures that only genuine capability extensions score HIGH_UTILITY (7-10). Skills are categorized during Phase 0 before utility analysis, and each category has a maximum utility ceiling.
+**What is Capability Gain?** It measures what _Claude itself_ can now do, not how helpful the idea is to you.
+
+The categorization system ensures that only genuine capability extensions receive high capability gain scores. Skills are categorized during Phase 0, and each category has a defined capability level:
+- **High Gain**: Adds new reasoning, knowledge, or analysis capabilities
+- **Strong Gain**: Adds executable capabilities within Claude's environment
+- **Limited Gain**: Useful for users but doesn't expand Claude's abilities
 
 ---
 
@@ -125,32 +130,33 @@ Documentation and API reference for external tools that Claude uses to generate 
 
 ---
 
-### 5. EXECUTOR - AGENTIC (max 6/10) **[v2.1 NEW]**
-**Real Power-up: ✓**
+### 5. 🟢 AGENTIC SKILL (Strong Capability Gain) **[v2.1 NEW]**
+**Badge:** Green circle • **Label:** "Agentic Skill" • **Gain Level:** Strong
 
-Executable capabilities that Claude can run safely in its sandbox environment.
+Executable capabilities that run safely inside Claude's environment.
 
-**What Claude Gets:**
-- New executable capability
-- Ability to run tools/scripts in sandbox
-- Direct execution of processing tasks
+**What Claude Gains:**
+- Real executable capability
+- Can process data, run scripts, transform files directly
+- No longer needs to delegate to external systems
+
+**What This Means:**
+Runs safely here. Adds new Claude capability.
 
 **Examples:**
-- FFmpeg video processor
-- Python data pipeline
-- Image processing with ImageMagick
-- File format converter
-- Batch file operations
-- Data transformation scripts
+- Data processing and transformation
+- File format conversion
+- Batch operations on files
+- Text analysis and extraction
+- Data validation and cleaning
 
 **Indicators:**
 - "bash commands", "python script"
 - "file operations", "data processing"
-- "ffmpeg", "imagemagick"
 - "tool orchestration", "sandbox"
 
 **Requirements:**
-- Can run entirely in Claude's sandbox
+- Can run entirely in Claude's environment
 - No external systems/services needed
 - No privileged operations (sudo, system daemons)
 - Bounded execution (no infinite loops)
@@ -162,38 +168,43 @@ Executable capabilities that Claude can run safely in its sandbox environment.
 - ✓ No production system access
 
 **Key Test:**
-- Can run in Claude's sandbox? ✓
+- Can run in Claude's environment? ✓
 - Requires no external dependencies? ✓
 - No privileged operations? ✓
-- **If all YES → EXECUTOR (agentic, 6/10)**
+- **If all YES → Agentic Skill (Strong Gain)**
 
 ---
 
-### 6. EXECUTOR - EXTERNAL (max 2/10)
-**Real Power-up: ✗**
+### 6. 🟠 EXTERNAL SKILL (Limited Capability Gain)
+**Badge:** Orange circle • **Label:** "External Skill" • **Gain Level:** Limited
 
-Automation that requires external systems or privileged access that Claude cannot control.
+Code that runs on your system, not in Claude's environment.
 
-**What Claude Gets:**
-- Nothing (requires live external systems)
-- Security/safety concerns prevent execution
+**What Claude Gains:**
+- Nothing directly (Claude can't execute external systems)
+- Improves code generation quality for you
+
+**What This Means:**
+Runs on your system. Still useful (generates code you can run), but doesn't expand what Claude itself can do.
 
 **Examples:**
-- Hammerspoon automation (requires macOS daemon)
-- Live CI/CD pipeline runner
-- Production cloud deployer
-- System daemon controller
-- Live database migrator
+- Desktop automation (requires OS-level tools)
+- System administration scripts
+- Cloud deployment automation
+- Database operations on live systems
+- Hardware control
 
 **Indicators:**
 - "system daemon", "hardware control"
 - "live database", "production deployment"
 - "external service", "privileged access"
-- "hammerspoon", "autohotkey", "systemd", "cron"
+- "desktop automation", "systemd", "cron"
 
-**Key Test:** Requires external systems, privileged access, or live services? If YES → EXECUTOR (external, 2/10)
+**Key Test:** Requires external systems, privileged access, or live services? If YES → External Skill (Limited Gain)
 
-**Why Low Score:** Claude cannot execute this capability. These should typically be redesigned as PROCESSOR or REFERENCE_CODEGEN skills.
+**Better Alternatives:** Consider redesigning as:
+- **PROCESSOR**: Analysis logic Claude can execute
+- **REFERENCE_CODEGEN**: API docs to improve code generation quality
 
 ---
 
@@ -252,50 +263,50 @@ Does this involve code execution?
 
 ---
 
-## Executor Subtype Examples (v2.1)
+## Executor Skill Examples (v2.1)
 
-### AGENTIC Examples (6/10 max)
+### 🟢 Agentic Skill Examples (Strong Gain)
 
-✅ **FFmpeg Video Processor**
-- Runs: `ffmpeg -i input.mp4 -vf scale=1280:720 output.mp4`
-- Sandbox: ✓ (ffmpeg available)
-- External: ✗ (no external services)
-- Score: Up to 6/10
-
-✅ **Python Data Pipeline**
+✅ **Data Processing Pipeline**
 - Runs: Python scripts for data transformation
-- Sandbox: ✓ (python available)
-- External: ✗ (processes local data)
-- Score: Up to 6/10
+- Environment: ✓ (runs in Claude)
+- External: ✗ (no external services)
+- Gain: Strong
 
-✅ **Image Batch Processor**
-- Runs: ImageMagick commands
-- Sandbox: ✓ (convert available)
+✅ **File Format Converter**
+- Runs: Batch file operations
+- Environment: ✓ (runs in Claude)
 - External: ✗ (local files only)
-- Score: Up to 6/10
+- Gain: Strong
 
-### EXTERNAL Examples (2/10 max)
+✅ **Text Analysis Tool**
+- Runs: Processing and extraction logic
+- Environment: ✓ (runs in Claude)
+- External: ✗ (no external dependencies)
+- Gain: Strong
 
-❌ **Hammerspoon Automation**
-- Runs: Hammerspoon Lua scripts
-- Sandbox: ✗ (requires macOS daemon)
-- External: ✓ (system-level automation)
-- Score: Max 2/10
-- **Better alternative:** REFERENCE_CODEGEN skill with Hammerspoon API docs (9/10 max)
+### 🟠 External Skill Examples (Limited Gain)
 
-❌ **Live Database Migrator**
-- Runs: Database migration scripts
-- Sandbox: ✗ (requires database connection)
+⚠️ **Desktop Automation**
+- Runs: System-level automation scripts
+- Environment: ✗ (requires OS tools)
+- External: ✓ (desktop applications)
+- Gain: Limited
+- **Better alternative:** REFERENCE_CODEGEN skill with automation API docs (High Gain)
+
+⚠️ **Live Database Manager**
+- Runs: Database operations on live systems
+- Environment: ✗ (requires database connection)
 - External: ✓ (live database)
-- Score: Max 2/10
-- **Better alternative:** PROCESSOR skill that generates migration scripts (9/10 max)
+- Gain: Limited
+- **Better alternative:** PROCESSOR skill that generates SQL scripts (High Gain)
 
-❌ **Production Deploy Runner**
-- Runs: Deployment scripts
-- Sandbox: ✗ (requires cloud access)
-- External: ✓ (production systems)
-- Score: Max 2/10
-- **Better alternative:** REFERENCE_CODEGEN skill with deployment patterns (9/10 max)
+⚠️ **Cloud Deployment Tool**
+- Runs: Deployment to production systems
+- Environment: ✗ (requires cloud access)
+- External: ✓ (production infrastructure)
+- Gain: Limited
+- **Better alternative:** REFERENCE_CODEGEN skill with deployment patterns (High Gain)
 
 ---
 

@@ -2706,14 +2706,70 @@ Begin your research and synthesis.`;
       if (analysis.skill_category) {
         // Category color and icon mapping
         const categoryConfig = {
-          'TEMPLATE': { color: '#f8b4ae', icon: '📄', label: 'TEMPLATE', powerUp: false },
-          'METHODOLOGY': { color: '#8ab4f8', icon: '🧠', label: 'METHODOLOGY', powerUp: true },
-          'KNOWLEDGE': { color: '#81c995', icon: '📚', label: 'KNOWLEDGE', powerUp: true },
-          'PROCESSOR': { color: '#fdd663', icon: '⚙️', label: 'PROCESSOR', powerUp: true },
-          'REFERENCE_CODEGEN': { color: '#c58af9', icon: '📖', label: 'REFERENCE_CODEGEN', powerUp: true },
-          'EXECUTOR': { color: '#f8b4ae', icon: '🤖', label: 'EXECUTOR', powerUp: false },
-          'EXECUTOR_AGENTIC': { color: '#81c995', icon: '🤖', label: 'EXECUTOR (AGENTIC)', powerUp: true },
-          'EXECUTOR_EXTERNAL': { color: '#f8b4ae', icon: '🔗', label: 'EXECUTOR (EXTERNAL)', powerUp: false }
+          'TEMPLATE': {
+            color: '#f8b4ae',
+            icon: '📄',
+            label: 'TEMPLATE',
+            powerUp: false,
+            capabilityGain: 'limited',
+            description: 'Code templates'
+          },
+          'METHODOLOGY': {
+            color: '#8ab4f8',
+            icon: '🧠',
+            label: 'METHODOLOGY',
+            powerUp: true,
+            capabilityGain: 'high',
+            description: 'Reasoning framework'
+          },
+          'KNOWLEDGE': {
+            color: '#81c995',
+            icon: '📚',
+            label: 'KNOWLEDGE',
+            powerUp: true,
+            capabilityGain: 'high',
+            description: 'Domain expertise'
+          },
+          'PROCESSOR': {
+            color: '#fdd663',
+            icon: '⚙️',
+            label: 'PROCESSOR',
+            powerUp: true,
+            capabilityGain: 'high',
+            description: 'Analysis logic'
+          },
+          'REFERENCE_CODEGEN': {
+            color: '#c58af9',
+            icon: '📖',
+            label: 'REFERENCE_CODEGEN',
+            powerUp: true,
+            capabilityGain: 'high',
+            description: 'API reference'
+          },
+          'EXECUTOR': {
+            color: '#f8b4ae',
+            icon: '🤖',
+            label: 'EXECUTOR',
+            powerUp: false,
+            capabilityGain: 'limited',
+            description: 'External automation'
+          },
+          'EXECUTOR_AGENTIC': {
+            color: '#81c995',
+            icon: '🟢',
+            label: 'Agentic Skill',
+            powerUp: true,
+            capabilityGain: 'strong',
+            description: 'Runs safely here'
+          },
+          'EXECUTOR_EXTERNAL': {
+            color: '#f8b4ae',
+            icon: '🟠',
+            label: 'External Skill',
+            powerUp: false,
+            capabilityGain: 'limited',
+            description: 'Runs elsewhere'
+          }
         };
 
         // Handle executor subtypes
@@ -2722,51 +2778,66 @@ Begin your research and synthesis.`;
           categoryKey = `EXECUTOR_${analysis.executor_subtype.toUpperCase()}`;
         }
 
-        const config = categoryConfig[categoryKey] || { color: '#9aa0a6', icon: '❓', label: analysis.skill_category, powerUp: false };
+        const config = categoryConfig[categoryKey] || {
+          color: '#9aa0a6',
+          icon: '❓',
+          label: analysis.skill_category,
+          powerUp: false,
+          capabilityGain: 'unknown',
+          description: 'Unknown type'
+        };
 
-        // Display category badge
+        // Display category badge with capability gain
+        const capabilityGainLabels = {
+          'high': { text: 'High Capability Gain', color: '#81c995' },
+          'strong': { text: 'Strong Capability Gain', color: '#81c995' },
+          'limited': { text: 'Limited Capability Gain', color: '#f8b4ae' },
+          'unknown': { text: 'Unknown', color: '#9aa0a6' }
+        };
+        const gainLabel = capabilityGainLabels[config.capabilityGain] || capabilityGainLabels['unknown'];
+
         categoryBadgeSection.innerHTML = `
           <div style="background: rgba(${config.powerUp ? '138, 180, 248' : '248, 180, 174'}, 0.1); border: 1px solid ${config.color}; border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 12px;">
             <div style="font-size: 32px;">${config.icon}</div>
             <div style="flex: 1;">
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap;">
                 <span style="background: ${config.color}; color: #0a0b0d; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px;">
                   ${config.label}
                 </span>
-                ${analysis.is_real_power_up ?
-                  '<span style="color: var(--accent-secondary); font-weight: 600; font-size: 13px;">✓ Real Power-up</span>' :
-                  '<span style="color: #f8b4ae; font-weight: 600; font-size: 13px;">✗ Not a Power-up</span>'}
+                <span style="color: ${gainLabel.color}; font-weight: 600; font-size: 13px;">
+                  ${config.powerUp ? '✓' : '○'} ${gainLabel.text}
+                </span>
                 ${analysis.category_capped ?
-                  `<span style="color: #fdd663; font-size: 13px; font-weight: 600;">⚠️ Score Capped: ${analysis.original_score} → ${analysis.utility_score}</span>` : ''}
+                  `<span style="color: #fdd663; font-size: 13px; font-weight: 600;">⚠️ Capped: ${analysis.original_score} → ${analysis.utility_score}</span>` : ''}
               </div>
               <div style="color: var(--text-secondary); font-size: 13px; line-height: 1.5;">
-                ${analysis.category_reasoning}
+                ${config.description} — ${analysis.category_reasoning}
               </div>
             </div>
           </div>
         `;
 
-        // Display category explanation
+        // Display category explanation (human-readable)
         const categoryExplanations = {
-          'TEMPLATE': 'This is a template/documentation skill. Claude can already generate this type of code from training data. Maximum utility for template skills: 3/10',
-          'METHODOLOGY': 'This skill provides a reasoning framework that Claude can apply to analyze and solve problems. Real power-up.',
-          'KNOWLEDGE': 'This skill provides domain knowledge that Claude can use in reasoning and analysis. Real power-up.',
-          'PROCESSOR': 'This skill provides processing/analysis logic that Claude can execute to analyze information. Real power-up.',
-          'REFERENCE_CODEGEN': 'This skill provides API reference and documentation for external tools. Claude uses this to generate better code that users execute externally. Real power-up for code generation quality.',
-          'EXECUTOR': 'This is an automation script that requires external execution. Claude cannot execute this capability. Maximum utility for executor skills: 2/10',
-          'EXECUTOR_AGENTIC': 'This skill provides executable capabilities that Claude can run safely in its sandbox environment (e.g., FFmpeg, Python, file operations). Real power-up with agentic execution. Maximum utility: 6/10',
-          'EXECUTOR_EXTERNAL': 'This automation requires external systems or privileged access that Claude cannot control (e.g., system daemons, live databases, Hammerspoon). Maximum utility for external executor skills: 2/10'
+          'TEMPLATE': 'Code templates and examples. Claude already knows how to generate these patterns from its training data.',
+          'METHODOLOGY': 'Reasoning framework that Claude can apply directly. Expands how Claude thinks about problems.',
+          'KNOWLEDGE': 'Domain expertise that Claude can use in its analysis. Adds specialized knowledge Claude needs.',
+          'PROCESSOR': 'Analysis logic Claude can execute. Gives Claude new ways to process and understand information.',
+          'REFERENCE_CODEGEN': 'API documentation that helps Claude write better code for external tools. Improves code generation quality.',
+          'EXECUTOR': 'Automation that runs outside Claude. Helpful for you, but not a new Claude capability.',
+          'EXECUTOR_AGENTIC': 'Runs safely inside Claude\'s environment. Adds real executable capability — Claude can now process data, run scripts, and transform files directly.',
+          'EXECUTOR_EXTERNAL': 'Runs on your system, not in Claude. Still useful (generates code you can run), but doesn\'t expand what Claude itself can do.'
         };
 
-        // Show explanation for non-power-ups OR agentic executors (to explain the new 6/10 ceiling)
+        // Show explanation for non-power-ups OR agentic executors (to explain capability gain)
         if (!analysis.is_real_power_up || (analysis.skill_category === 'EXECUTOR' && analysis.executor_subtype === 'agentic')) {
           categoryExplanationSection.classList.remove('hidden');
           const explanationStyle = analysis.is_real_power_up ?
             'background: rgba(129, 201, 149, 0.08); border-left: 4px solid #81c995;' :
             'background: rgba(248, 180, 174, 0.08); border-left: 4px solid #f8b4ae;';
           const explanationTitle = analysis.is_real_power_up ?
-            `<strong style="color: #81c995;">Agentic Execution Capability:</strong>` :
-            `<strong style="color: #f8b4ae;">Why Not a Power-up:</strong>`;
+            `<strong style="color: #81c995;">✓ What This Adds:</strong>` :
+            `<strong style="color: #f8b4ae;">○ Capability Limitation:</strong>`;
 
           categoryExplanationSection.innerHTML = `
             <div style="${explanationStyle} border-radius: 8px; padding: 16px;">
@@ -2778,6 +2849,22 @@ Begin your research and synthesis.`;
           `;
         } else {
           categoryExplanationSection.classList.add('hidden');
+        }
+
+        // Add contextual "What is Capability Gain?" info card (v2.1)
+        if (analysis.skill_category === 'EXECUTOR') {
+          const capabilityGainInfo = document.createElement('div');
+          capabilityGainInfo.style.cssText = 'background: rgba(138, 180, 248, 0.08); border: 1px solid rgba(138, 180, 248, 0.3); border-radius: 8px; padding: 14px; margin-top: 12px; font-size: 12px; line-height: 1.5;';
+          capabilityGainInfo.innerHTML = `
+            <strong style="color: #8ab4f8;">💡 What is Capability Gain?</strong>
+            <p style="margin: 6px 0 0 0; color: var(--text-secondary);">
+              Capability Gain measures what <em>Claude itself</em> can now do, not how helpful the idea is to you.
+              Skills that run inside Claude's environment add real execution capability.
+              Skills that run on your system are still useful (they help Claude write better code for you),
+              but they don't expand Claude's own abilities.
+            </p>
+          `;
+          categoryExplanationSection.parentElement.insertBefore(capabilityGainInfo, categoryExplanationSection.nextSibling);
         }
       }
 
