@@ -399,6 +399,10 @@
     }
 
     @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+
       .button-group {
         flex-direction: column;
       }
@@ -406,6 +410,180 @@
       .button-group .btn {
         width: 100%;
         min-width: 0;
+      }
+
+      /* Header Responsiveness */
+      .header-surface {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 28px;
+        margin-bottom: 16px;
+        letter-spacing: -0.5px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* Stepper Responsiveness */
+      .aviram-surface {
+        padding: 20px 16px;
+      }
+
+      .stepper {
+        overflow-x: auto;
+        overflow-y: hidden;
+        justify-content: flex-start;
+        margin: 16px -16px;
+        padding: 12px 16px;
+        gap: 8px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+      }
+
+      .stepper::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Edge */
+      }
+
+      .step {
+        flex: 0 0 auto;
+        min-width: 64px;
+        scroll-snap-align: center;
+      }
+
+      .step-circle {
+        width: 48px;
+        height: 48px;
+        font-size: 16px;
+      }
+
+      .step-circle.active {
+        transform: scale(1.1);
+      }
+
+      .step-label {
+        font-size: 10px;
+        margin-top: 10px;
+        white-space: nowrap;
+        max-width: 64px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .step-line {
+        top: 24px;
+      }
+
+      /* Status Badge Responsiveness */
+      .status-badge {
+        display: block;
+        padding: 10px 16px;
+        font-size: 14px;
+        word-wrap: break-word;
+        word-break: break-word;
+        margin: 12px 0;
+      }
+
+      /* Text Areas and Inputs */
+      textarea {
+        height: 200px;
+        font-size: 13px;
+      }
+
+      /* Progress and Error Messages */
+      #errorMessage,
+      #progressMessage {
+        font-size: 13px !important;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        line-height: 1.6;
+      }
+
+      /* Long URLs and links */
+      a {
+        word-break: break-all;
+        overflow-wrap: break-word;
+      }
+
+      /* Utility Analysis Responsive */
+      #utilityResults > div {
+        flex-direction: column !important;
+        gap: 16px !important;
+      }
+
+      #utilityScoreDisplay {
+        font-size: 36px !important;
+      }
+
+      /* Progress text alignment */
+      .progress-text {
+        font-size: 12px;
+      }
+
+      /* Card headers on mobile */
+      h2 {
+        font-size: 20px;
+      }
+
+      h3 {
+        font-size: 16px;
+        margin-bottom: 12px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .header-surface {
+        padding: 24px 16px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .subtitle {
+        font-size: 12px;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      .step-circle {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+      }
+
+      .step-label {
+        font-size: 9px;
+        margin-top: 8px;
+        max-width: 56px;
+      }
+
+      .step-line {
+        top: 20px;
+      }
+
+      /* Stack card headers on very small screens */
+      #progressCard > div:first-child,
+      #utilityCard > div:first-child {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px;
+      }
+
+      .reset-link {
+        float: none;
+        display: inline-block;
       }
     }
 
