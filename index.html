@@ -2093,6 +2093,21 @@ Return ONLY the JSON object.`;
       addLog(`✓ Domain identified: ${domainContext.primary_domain}`, 'success');
       addLog(`✓ Domain practitioners: ${domainContext.domain_practitioners.join(', ')}`, 'info');
 
+      // Helper function to escape strings for safe embedding in JSON examples
+      const escapeForJSON = (str) => {
+        if (!str) return str;
+        return str.replace(/\\/g, '\\\\')
+                  .replace(/"/g, '\\"')
+                  .replace(/'/g, "\\'")
+                  .replace(/\n/g, '\\n')
+                  .replace(/\r/g, '\\r')
+                  .replace(/\t/g, '\\t');
+      };
+
+      const practitionersStr = escapeForJSON(domainContext.domain_practitioners.join(' or '));
+      const primaryDomainStr = escapeForJSON(domainContext.primary_domain);
+      const primaryDomainUpperStr = escapeForJSON(domainContext.primary_domain.toUpperCase());
+
       const prompt = `You are the Problem Identifier Agent for the ${domainContext.primary_domain} domain.
 
 ⚠️ CRITICAL CONSTRAINT - DOMAIN LOCK ⚠️
@@ -2174,7 +2189,7 @@ Power-up: ${utilityAnalysis.power_up_statement}
 Return JSON with this exact structure:
 {
   "domain_analysis": {
-    "user_specified_domain": "${domainContext.primary_domain}",
+    "user_specified_domain": "${primaryDomainStr}",
     "domain_verified": true,
     "domain_constraints_applied": true,
     "practitioners_analyzed": ${JSON.stringify(domainContext.domain_practitioners)}
@@ -2182,7 +2197,7 @@ Return JSON with this exact structure:
   "domain_research": {
     "practitioner_pain_points": [
       {
-        "problem": "Specific problem practitioners face IN ${domainContext.primary_domain.toUpperCase()}",
+        "problem": "Specific problem practitioners face IN ${primaryDomainUpperStr}",
         "why_hard": "What makes this challenging",
         "current_workaround": "How they solve it now",
         "cost_of_problem": "Time/money/errors cost",
@@ -2190,21 +2205,21 @@ Return JSON with this exact structure:
         "domain_relevance_score": 8-10
       }
     ],
-    "claude_capability_gap": "What Claude specifically cannot do well for ${domainContext.primary_domain}",
-    "value_unlock": "What would be unlocked by solving this FOR ${domainContext.domain_practitioners.join(' or ')}"
+    "claude_capability_gap": "What Claude specifically cannot do well for ${primaryDomainStr}",
+    "value_unlock": "What would be unlocked by solving this FOR ${practitionersStr}"
   },
   "redesign_suggestions": [
     {
-      "original_skill": "${requirements.skill_name}",
+      "original_skill": "${escapeForJSON(requirements.skill_name)}",
       "redesigned_skill": "new-skill-name with specific capability",
-      "problem_it_solves": "Specific practitioner pain point addressed IN ${domainContext.primary_domain.toUpperCase()}",
-      "claude_power_up": "Specific capability this adds to Claude FOR ${domainContext.primary_domain.toUpperCase()}",
+      "problem_it_solves": "Specific practitioner pain point addressed IN ${primaryDomainUpperStr}",
+      "claude_power_up": "Specific capability this adds to Claude FOR ${primaryDomainUpperStr}",
       "estimated_utility_score": 7-9,
       "why_higher_utility": "Why this scores higher than original",
-      "measurable_outcome": "Concrete, measurable result FOR ${domainContext.domain_practitioners.join(' or ')}",
+      "measurable_outcome": "Concrete, measurable result FOR ${practitionersStr}",
       "specific_implementation": "What data goes in → what comes out",
       "domain_relevance_score": 8-10,
-      "domain_fit_explanation": "Why this is relevant to ${domainContext.primary_domain}"
+      "domain_fit_explanation": "Why this is relevant to ${primaryDomainStr}"
     }
   ]
 }
@@ -3233,10 +3248,10 @@ Begin your research and synthesis.`;
           const domainRelevanceColor = domainRelevanceScore >= 8 ? 'var(--accent-secondary)' : domainRelevanceScore >= 7 ? '#fdd663' : '#f8b4ae';
 
           html += `
-            <div style="background: rgba(30, 33, 39, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 16px; cursor: pointer; transition: all 0.3s ease;"
+            <div class="redesign-card" data-skill-name="${suggestion.redesigned_skill.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+                 style="background: rgba(30, 33, 39, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 16px; cursor: pointer; transition: all 0.3s ease;"
                  onmouseover="this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(138, 180, 248, 0.08)';"
-                 onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.background='rgba(30, 33, 39, 0.6)';"
-                 onclick='selectRedesign("${suggestion.redesigned_skill.replace(/"/g, '&quot;')}")'>
+                 onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.background='rgba(30, 33, 39, 0.6)';">
               <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; gap: 8px;">
                 <div style="flex: 1;">
                   <h4 style="color: var(--accent-primary); margin: 0 0 8px 0; font-size: 16px;">${suggestion.redesigned_skill}</h4>
@@ -3283,6 +3298,15 @@ Begin your research and synthesis.`;
       }
 
       containerDiv.innerHTML = html;
+
+      // Add click event listeners to redesign cards
+      const redesignCards = containerDiv.querySelectorAll('.redesign-card');
+      redesignCards.forEach(card => {
+        card.addEventListener('click', function() {
+          const skillName = this.getAttribute('data-skill-name');
+          selectRedesign(skillName);
+        });
+      });
     }
 
     function displayBasicRedesigns(analysis) {
