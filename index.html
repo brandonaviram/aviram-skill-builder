@@ -5845,7 +5845,7 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
     }
 
     async function startGeneration() {
-      const input = document.getElementById('skillInput').value.trim();
+      let input = document.getElementById('skillInput').value.trim();
       if (!input || isGenerating) return;
 
       try {
@@ -5856,29 +5856,42 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         document.getElementById('progressCard').classList.remove('hidden');
         document.getElementById('logContainer').innerHTML = '';
 
+        // Initialize retry counter
+        if (!window.generationRetryCount) {
+          window.generationRetryCount = 0;
+        }
+
         // Stage 0: Viability Check (NEW - determines if this should be a skill)
         setStep(0);
-        const viabilityCheck = await stage0_viabilityCheck(input);
+        let viabilityCheck = await stage0_viabilityCheck(input);
 
         // AUTO-CORRECTION: If viability check fails, try to auto-narrow and retry
         if (viabilityCheck.decision === 'NEEDS_REFINEMENT' && viabilityCheck.viability_score < 7.0) {
-          // Check if we've already retried (prevent infinite loop)
-          const retryCount = window.generationRetryCount || 0;
           const MAX_RETRIES = 2;
 
-          if (retryCount < MAX_RETRIES) {
+          if (window.generationRetryCount < MAX_RETRIES) {
             addLog(`⚠️ Viability check: ${viabilityCheck.reason}`, 'warning');
-            addLog(`Auto-correcting scope (attempt ${retryCount + 1}/${MAX_RETRIES})...`, 'info');
+            addLog(`Auto-correcting scope (attempt ${window.generationRetryCount + 1}/${MAX_RETRIES})...`, 'info');
 
             try {
               const narrowedInput = await autoNarrowScope(input);
-              addLog(`✓ Retrying with narrowed scope`, 'success');
 
-              // Increment retry counter and retry generation
-              window.generationRetryCount = retryCount + 1;
+              // Replace input with narrowed version
+              input = narrowedInput;
+              window.generationRetryCount++;
 
-              // Recursively retry with narrowed input
-              return await generateSkill(narrowedInput);
+              addLog(`✓ Continuing with narrowed scope`, 'success');
+              addLog(`Retrying viability check...`, 'info');
+
+              // Re-run viability check with narrowed input
+              viabilityCheck = await stage0_viabilityCheck(input);
+
+              // If still fails, the loop will catch it on next iteration
+              // For now, continue with whatever result we got
+              if (viabilityCheck.viability_score >= 7.0 || viabilityCheck.decision === 'PROCEED') {
+                addLog(`✓ Viability improved: ${viabilityCheck.viability_score}/10`, 'success');
+              }
+
             } catch (err) {
               addLog(`❌ Auto-narrowing failed: ${err.message}`, 'error');
               addLog('Proceeding with original concept...', 'warning');
@@ -5898,7 +5911,7 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         // Reset retry counter on successful viability check
         window.generationRetryCount = 0;
 
-        // Phase 1: Extract Requirements
+        // Phase 1: Extract Requirements (now using potentially narrowed input)
         setStep(1);
         const requirements = await extractRequirements(input);
 
