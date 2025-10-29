@@ -2496,6 +2496,11 @@ Begin your research and synthesis.`;
        * Extract constraints from YAML frontmatter (primary source)
        * Looks for metadata.constraints field in YAML section
        */
+      // Add null/undefined check
+      if (!text || typeof text !== 'string') {
+        return [];
+      }
+
       const constraints = [];
 
       try {
@@ -2542,6 +2547,11 @@ Begin your research and synthesis.`;
        * Extract constraint statements from text (secondary source)
        * Looks for constraint keywords in description body
        */
+      // Add null/undefined check
+      if (!description || typeof description !== 'string') {
+        return [];
+      }
+
       const constraintKeywords = [
         'Cannot',
         'cannot',
@@ -2597,6 +2607,11 @@ Begin your research and synthesis.`;
        * Extract ALL constraints from YAML metadata + description text
        * Returns array of constraint strings
        */
+      // Add null/undefined check
+      if (!description || typeof description !== 'string') {
+        return [];
+      }
+
       const constraints = [];
 
       // Priority 1: YAML metadata constraints (most reliable)
@@ -2628,6 +2643,11 @@ Begin your research and synthesis.`;
        * Extract specific capability claims from power-up statement
        * Returns array of claimed capabilities
        */
+      // Add null/undefined check
+      if (!powerUpStatement || typeof powerUpStatement !== 'string') {
+        return [];
+      }
+
       const claims = [];
       const statement = powerUpStatement.toLowerCase();
 
