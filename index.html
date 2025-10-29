@@ -1684,6 +1684,15 @@ Return ONLY valid JSON (no markdown):
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const extracted = JSON.parse(response);
 
+        // Validate that required fields are present and not undefined
+        if (!extracted.skill_name || extracted.skill_name === 'undefined') {
+          throw new Error('Could not determine a single skill name from your input. Try being more specific (e.g., "weather forecast skill" instead of "skills for...")');
+        }
+
+        if (!extracted.description || extracted.description === 'undefined') {
+          throw new Error('Could not determine what the skill should do. Please provide more details about the desired functionality.');
+        }
+
         addLog(`Extracted skill: ${extracted.skill_name}`, 'success');
         updateProgress('Input Processing', 100, 'Requirements extracted');
         return extracted;
