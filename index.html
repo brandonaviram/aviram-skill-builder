@@ -1544,6 +1544,85 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
       document.getElementById('errorMessage').textContent = message;
     }
 
+    async function showClarificationUI(clarificationData) {
+      // Hide progress, show input card with clarification options
+      document.getElementById('progressCard').classList.add('hidden');
+      document.getElementById('inputCard').classList.remove('hidden');
+
+      const inputSection = document.getElementById('inputCard');
+
+      // Create clarification UI
+      const clarificationHTML = `
+        <div style="margin-top: 20px; padding: 20px; background: rgba(255, 152, 0, 0.1); border: 2px solid var(--warning); border-radius: 8px;">
+          <h3 style="color: var(--warning); margin-top: 0;">🤔 Which skill did you mean?</h3>
+          <p style="margin-bottom: 15px;">Your input <strong>"${clarificationData.original_input}"</strong> could mean different things. Please choose:</p>
+          <div id="clarificationOptions" style="display: flex; flex-direction: column; gap: 10px;">
+            ${clarificationData.alternatives.map((alt, idx) => `
+              <button class="clarification-option" data-index="${idx}" style="
+                padding: 15px;
+                background: var(--surface);
+                border: 2px solid var(--border);
+                border-radius: 8px;
+                cursor: pointer;
+                text-align: left;
+                transition: all 0.2s;
+              ">
+                <strong style="color: var(--accent-primary);">${alt.skill_name}</strong>
+                <p style="margin: 5px 0 0 0; color: var(--text-secondary); font-size: 0.9em;">${alt.description}</p>
+              </button>
+            `).join('')}
+            <button id="refineInputBtn" style="
+              padding: 15px;
+              background: var(--surface);
+              border: 2px dashed var(--border);
+              border-radius: 8px;
+              cursor: pointer;
+              color: var(--text-secondary);
+            ">
+              ✏️ Or refine my input instead
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Insert after the input textarea
+      const skillInput = document.getElementById('skillInput');
+      const existingClarification = document.getElementById('clarificationSection');
+      if (existingClarification) {
+        existingClarification.remove();
+      }
+
+      const clarificationDiv = document.createElement('div');
+      clarificationDiv.id = 'clarificationSection';
+      clarificationDiv.innerHTML = clarificationHTML;
+      skillInput.parentNode.insertBefore(clarificationDiv, skillInput.nextSibling);
+
+      // Add event listeners
+      document.querySelectorAll('.clarification-option').forEach(btn => {
+        btn.addEventListener('mouseover', function() {
+          this.style.borderColor = 'var(--accent-primary)';
+          this.style.background = 'rgba(139, 92, 246, 0.1)';
+        });
+        btn.addEventListener('mouseout', function() {
+          this.style.borderColor = 'var(--border)';
+          this.style.background = 'var(--surface)';
+        });
+        btn.addEventListener('click', function() {
+          const idx = parseInt(this.dataset.index);
+          const chosen = clarificationData.alternatives[idx];
+          // Update the input field and regenerate
+          document.getElementById('skillInput').value = chosen.skill_name;
+          clarificationDiv.remove();
+          startGeneration();
+        });
+      });
+
+      document.getElementById('refineInputBtn').addEventListener('click', function() {
+        clarificationDiv.remove();
+        document.getElementById('skillInput').focus();
+      });
+    }
+
     function showResults(validation, tree, filename) {
       document.getElementById('progressSection').classList.add('hidden');
       document.getElementById('resultsSection').classList.remove('hidden');
@@ -1663,9 +1742,22 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
       addLog('Analyzing input and extracting requirements...', 'info');
       updateProgress('Input Processing', 10, 'Parsing requirements...');
 
-      const prompt = `Extract skill requirements from this input as JSON:
+      const prompt = `Extract skill requirements from this natural language input as JSON.
+
+IMPORTANT: Users may phrase requests conversationally. Interpret their intent:
+- "skills for X" → they want a single skill about X
+- "help me with X" → they want an X helper/guide skill
+- "I need X" → they want an X tool/framework skill
+- Plural "skills" often means they want ONE skill that covers that domain
 
 INPUT: ${input}
+
+Your task:
+1. Identify the CORE CONCEPT they want help with (even if phrased as plural/conversational)
+2. Create a singular, concrete skill name
+3. Define what that skill would do
+
+If the input is truly ambiguous (could mean 2+ completely different skills), set "needs_clarification": true and provide "alternatives" array.
 
 Return ONLY valid JSON (no markdown):
 {
@@ -1676,13 +1768,40 @@ Return ONLY valid JSON (no markdown):
   "required_apis": ["api1", "api2"],
   "key_features": ["feature1", "feature2"],
   "needs_scripts": true|false,
-  "needs_references": false
+  "needs_references": false,
+  "needs_clarification": false,
+  "alternatives": []
+}
+
+EXAMPLES:
+Input: "skills for navigating a recession"
+Output: {
+  "skill_name": "recession-navigation-guide",
+  "description": "Provides strategic frameworks and decision-making tools for business resilience during economic downturns",
+  ...
+}
+
+Input: "help me debug code"
+Output: {
+  "skill_name": "code-debugger",
+  "description": "Systematic debugging methodology and troubleshooting framework",
+  ...
 }`;
 
       try {
         let response = await callClaude(prompt);
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const extracted = JSON.parse(response);
+
+        // Check if clarification is needed
+        if (extracted.needs_clarification && extracted.alternatives && extracted.alternatives.length > 0) {
+          addLog('Input is ambiguous - needs clarification', 'warning');
+          return {
+            needs_clarification: true,
+            alternatives: extracted.alternatives,
+            original_input: input
+          };
+        }
 
         // Validate that required fields are present and not undefined
         if (!extracted.skill_name || extracted.skill_name === 'undefined') {
@@ -5541,6 +5660,14 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         // Phase 1: Extract Requirements
         setStep(1);
         const requirements = await extractRequirements(input);
+
+        // Check if clarification is needed
+        if (requirements.needs_clarification) {
+          addLog('⚠️ Your input could mean different things', 'warning');
+          await showClarificationUI(requirements);
+          return; // Stop generation and wait for user to clarify
+        }
+
         currentRequirements = requirements;
 
         // Store viability check results
