@@ -5511,6 +5511,7 @@ Focus on sources that provide actionable implementation guidance.`;
     /**
      * Enhanced domain research with division of labor and progressive refinement
      * Implements specialized research agents with distinct focuses
+     * NOW WITH PARALLEL EXECUTION for 3x speed improvement
      */
     async function researchDomain(skillConcept) {
       addLog('Initializing specialized research agents...', 'info');
@@ -5546,21 +5547,57 @@ Focus on sources that provide actionable implementation guidance.`;
         }
       ];
 
-      // Execute specialized agent searches
-      const knowledgeBase = {};
-
-      for (const agent of researchAgents) {
+      // Log agent initialization
+      researchAgents.forEach(agent => {
         addLog(`${agent.name}: ${agent.focus}`, 'info');
-        const agentResults = await performWebResearch([agent.query]);
+      });
 
-        // Store with agent context
-        knowledgeBase[agent.query] = {
-          ...agentResults[agent.query],
-          agent_name: agent.name,
-          agent_focus: agent.focus,
-          expected_types: agent.type
-        };
-      }
+      // PARALLEL EXECUTION: Run all agents simultaneously (3x speed improvement!)
+      addLog('⚡ Running 3 research agents in parallel...', 'info');
+
+      const agentPromises = researchAgents.map(async agent => {
+        try {
+          const agentResults = await performWebResearch([agent.query]);
+
+          // Return result with agent context
+          return {
+            query: agent.query,
+            result: {
+              ...agentResults[agent.query],
+              agent_name: agent.name,
+              agent_focus: agent.focus,
+              expected_types: agent.type
+            }
+          };
+        } catch (err) {
+          addLog(`⚠️ ${agent.name} failed: ${err.message}`, 'warning');
+          // Return error result
+          return {
+            query: agent.query,
+            result: {
+              findings: `Agent ${agent.name} failed`,
+              sources: [],
+              key_points: [],
+              verified: false,
+              error: err.message,
+              agent_name: agent.name,
+              agent_focus: agent.focus,
+              expected_types: agent.type
+            }
+          };
+        }
+      });
+
+      // Wait for all agents to complete
+      const agentResults = await Promise.all(agentPromises);
+
+      // Build knowledge base from parallel results
+      const knowledgeBase = {};
+      agentResults.forEach(({ query, result }) => {
+        knowledgeBase[query] = result;
+      });
+
+      addLog(`✓ Parallel research complete: ${agentResults.length} agents finished`, 'success');
 
       // Phase 2: Progressive Refinement - Check for gaps and search again
       addLog('Analyzing research gaps...', 'info');
