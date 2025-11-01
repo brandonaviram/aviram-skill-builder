@@ -4701,6 +4701,7 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
         const resourceData = research.resourceData || null;
         const pkg = await packageSkill(skillPackage, currentRequirements.skill_name, resourceData);
 
+        setStep(7); // Testing phase (step 7, displays as "8")
         // NEW: Stage 7 - Test the skill with Claude
         addLog('Starting skill testing phase...', 'info');
         const testResults = await stage7_testSkill(skillPackage, currentRequirements);
@@ -4777,6 +4778,7 @@ When the user asks questions or requests tasks related to the topics covered in 
         validation.testsPassed = `${finalTestResults.passedTests}/${finalTestResults.totalTests}`;
         validation.iterations = iterationResult.iterations || 0;
 
+        setStep(8); // Review phase (step 8, displays as "9") - all stages complete
         showResults(validation, finalPkg.tree, finalPkg.filename);
         addLog('🎉 Skill generation complete!', 'success');
 
