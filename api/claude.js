@@ -1,13 +1,21 @@
 /**
- * Model configuration for different pipeline phases
- * Each phase uses an optimized model for its specific task
+ * Aviram Factory Model Configuration
+ * Using latest Sonnet 4.5 for all phases for consistency and best quality
+ * Latest model (released Sept 29, 2025) - best coding model available
  */
-const MODELS = {
-  utility: 'claude-sonnet-4-20250514',      // Phase 0: Utility Analysis
-  extraction: 'claude-sonnet-4-20250514',   // Phase 1: Requirement Extraction
-  research: 'claude-sonnet-4-20250514',     // Phase 2: Research & Context Gathering
-  generation: 'claude-sonnet-4.5-20250929', // Phase 3: Skill Generation ⭐
-  validation: 'claude-sonnet-4-20250514'    // Phase 4: Validation & Quality Check
+const AVIRAM_FACTORY_MODELS = {
+  // All phases use Sonnet 4.5 for consistency and best quality
+  default: 'claude-sonnet-4-5-20250929',
+
+  // Phase-specific overrides (optional optimization)
+  utility: 'claude-sonnet-4-5-20250929',      // Phase 0: Utility Analysis
+  extraction: 'claude-sonnet-4-5-20250929',   // Phase 1: Requirement Extraction
+  research: 'claude-sonnet-4-5-20250929',     // Phase 2: Research & Context Gathering
+  generation: 'claude-sonnet-4-5-20250929',   // Phase 3: Skill Generation
+  validation: 'claude-sonnet-4-5-20250929',   // Phase 4: Validation & Quality Check
+
+  // Optional: Use Haiku for parallel research workers (2x speed, 1/3 cost)
+  research_workers: 'claude-haiku-4-5-20251015'
 };
 
 /**
@@ -16,7 +24,7 @@ const MODELS = {
  * @returns {string} - The model ID to use
  */
 function getModelForPhase(phase) {
-  return MODELS[phase] || 'claude-haiku-4-5'; // Default to Haiku for unknown phases
+  return AVIRAM_FACTORY_MODELS[phase] || AVIRAM_FACTORY_MODELS.default;
 }
 
 /**

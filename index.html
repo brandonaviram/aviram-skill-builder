@@ -5311,8 +5311,12 @@ Use \`FULL_PROMPT_EXPORT.txt\` to copy the complete skill into any Claude conver
     // For gathering real-world knowledge
     // ============================================
 
+    /**
+     * Enhanced research with detailed task descriptions and agent coordination
+     * Based on Anthropic's Multi-Agent Research Engineering best practices
+     */
     async function performWebResearch(queries) {
-      addLog('Performing web research with Claude...', 'info');
+      addLog('Performing enhanced multi-agent web research...', 'info');
 
       const results = {};
 
@@ -5323,17 +5327,45 @@ Use \`FULL_PROMPT_EXPORT.txt\` to copy the complete skill into any Claude conver
         addLog(`Researching: ${query}`, 'info');
 
         try {
-          const prompt = `Search the web and provide a concise research summary for: "${query}"
+          // Enhanced prompt with detailed task description, output format, and boundaries
+          const prompt = `Search the web and provide research for: "${query}"
 
-Return your findings in this JSON format (no markdown, just JSON):
+**Objective**: Find 5-7 high-quality sources on this topic
+
+**Output Format** (return ONLY valid JSON, no markdown):
 {
-  "findings": "2-3 sentence summary of key information found",
-  "sources": ["source1.com", "source2.com"],
+  "sources": [
+    {"url": "...", "type": "official_doc|github|stackoverflow|blog", "authority_score": 1-10, "key_info": "brief summary"},
+    ...
+  ],
+  "findings": "3-5 sentence synthesis of key insights",
   "key_points": ["point 1", "point 2", "point 3"],
   "verified": true
 }
 
-Focus on authoritative sources and practical information.`;
+**Sources Priority** (search in this order):
+1. Official documentation (docs.*.com, official GitHub repos)
+2. GitHub repositories (1000+ stars, updated 2023-2025, with working code examples)
+3. Stack Overflow answers (50+ votes, posted 2023+, with accepted answers)
+4. Authoritative technical blogs (engineering.*.com, official company blogs)
+
+**Task Boundary**:
+- Focus ONLY on: practical implementation details, working code patterns, official APIs
+- Exclude: tutorials without code, outdated content (pre-2023), unverified sources
+- Stop after: finding 5-7 quality sources OR after 5 search attempts
+
+**Quality Criteria**:
+- Official docs: Authority score 9-10
+- Popular GitHub (1000+ stars): Authority score 7-9
+- Verified Stack Overflow: Authority score 6-8
+- Quality blogs: Authority score 5-7
+
+**Example good sources**:
+- https://docs.anthropic.com/api-reference
+- https://github.com/anthropics/anthropic-sdk-python (5000+ stars)
+- https://stackoverflow.com/questions/12345678 (100+ votes, accepted answer)
+
+Focus on sources that provide actionable implementation guidance.`;
 
           const response = await callClaude(prompt, 800, 'research');
 
@@ -5367,20 +5399,106 @@ Focus on authoritative sources and practical information.`;
       return results;
     }
 
+    /**
+     * Enhanced domain research with division of labor and progressive refinement
+     * Implements specialized research agents with distinct focuses
+     */
     async function researchDomain(skillConcept) {
-      addLog('Researching domain knowledge from web sources...', 'info');
+      addLog('Initializing specialized research agents...', 'info');
 
-      const queries = [
-        `${skillConcept} best practices`,
-        `${skillConcept} API documentation`,
-        `${skillConcept} workflow patterns`,
-        `${skillConcept} common tools`
+      // Phase 1: Division of Labor - Create specialized research agents
+      const researchAgents = [
+        {
+          name: "docs_agent",
+          focus: "Official documentation only",
+          query: `${skillConcept} official documentation API reference`,
+          keywords: ["official", "docs", "API", "reference", "documentation"],
+          must_find: ["API reference", "official documentation", "getting started guide"],
+          expected_sources: 2,
+          type: "official_doc"
+        },
+        {
+          name: "examples_agent",
+          focus: "Working code examples from GitHub",
+          query: `${skillConcept} github examples implementation code`,
+          keywords: ["github", "example", "implementation", "code", "1000+ stars"],
+          must_find: ["working code", "example repository", "implementation"],
+          expected_sources: 3,
+          type: "github"
+        },
+        {
+          name: "practices_agent",
+          focus: "Best practices and common patterns",
+          query: `${skillConcept} best practices patterns common issues`,
+          keywords: ["best practices", "patterns", "common issues", "pitfalls"],
+          must_find: ["best practices", "design patterns", "troubleshooting"],
+          expected_sources: 2,
+          type: "stackoverflow"
+        }
       ];
 
-      // In production, this would actually search the web
-      const knowledgeBase = await performWebResearch(queries);
+      // Execute specialized agent searches
+      const knowledgeBase = {};
 
-      addLog(`✓ Researched ${Object.keys(knowledgeBase).length} knowledge areas`, 'success');
+      for (const agent of researchAgents) {
+        addLog(`${agent.name}: ${agent.focus}`, 'info');
+        const agentResults = await performWebResearch([agent.query]);
+
+        // Store with agent context
+        knowledgeBase[agent.query] = {
+          ...agentResults[agent.query],
+          agent_name: agent.name,
+          agent_focus: agent.focus,
+          expected_types: agent.type
+        };
+      }
+
+      // Phase 2: Progressive Refinement - Check for gaps and search again
+      addLog('Analyzing research gaps...', 'info');
+
+      const allSources = Object.values(knowledgeBase)
+        .flatMap(result => result.sources || []);
+
+      const hasOfficialDocs = allSources.some(s =>
+        s.type === 'official_doc' || s.url?.includes('docs.')
+      );
+      const hasGithub = allSources.some(s =>
+        s.type === 'github' || s.url?.includes('github.com')
+      );
+      const hasBestPractices = allSources.some(s =>
+        s.type === 'stackoverflow' || s.key_info?.toLowerCase().includes('best practice')
+      );
+
+      // Fill gaps with targeted refinement searches
+      const refinementQueries = [];
+
+      if (!hasOfficialDocs) {
+        refinementQueries.push(`${skillConcept} official documentation getting started`);
+        addLog('Gap detected: Missing official documentation - refining search', 'warning');
+      }
+      if (!hasGithub) {
+        refinementQueries.push(`${skillConcept} github popular repository examples`);
+        addLog('Gap detected: Missing GitHub examples - refining search', 'warning');
+      }
+      if (!hasBestPractices) {
+        refinementQueries.push(`${skillConcept} production best practices guide`);
+        addLog('Gap detected: Missing best practices - refining search', 'warning');
+      }
+
+      // Execute refinement searches if needed
+      if (refinementQueries.length > 0) {
+        addLog(`Running ${refinementQueries.length} refinement searches...`, 'info');
+        const refinedResults = await performWebResearch(refinementQueries);
+
+        // Merge refined results
+        Object.assign(knowledgeBase, refinedResults);
+      }
+
+      const totalSources = Object.values(knowledgeBase)
+        .flatMap(r => r.sources || []).length;
+
+      addLog(`✓ Research complete: ${Object.keys(knowledgeBase).length} searches, ${totalSources} sources found`, 'success');
+
       return knowledgeBase;
     }
 
