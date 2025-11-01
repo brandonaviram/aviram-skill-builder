@@ -1,4 +1,25 @@
 /**
+ * Model configuration for different pipeline phases
+ * Each phase uses an optimized model for its specific task
+ */
+const MODELS = {
+  utility: 'claude-sonnet-4-20250514',      // Phase 0: Utility Analysis
+  extraction: 'claude-sonnet-4-20250514',   // Phase 1: Requirement Extraction
+  research: 'claude-sonnet-4-20250514',     // Phase 2: Research & Context Gathering
+  generation: 'claude-sonnet-4.5-20250929', // Phase 3: Skill Generation ⭐
+  validation: 'claude-sonnet-4-20250514'    // Phase 4: Validation & Quality Check
+};
+
+/**
+ * Get the appropriate model for a given phase
+ * @param {string} phase - The pipeline phase (utility, extraction, research, generation, validation)
+ * @returns {string} - The model ID to use
+ */
+function getModelForPhase(phase) {
+  return MODELS[phase] || 'claude-haiku-4-5'; // Default to Haiku for unknown phases
+}
+
+/**
  * Retry a function with exponential backoff
  * @param {Function} fn - Async function to retry
  * @param {number} maxRetries - Maximum number of retry attempts (default: 4)
@@ -43,7 +64,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { apiKey, prompt, maxTokens = 2000 } = req.body;
+  const { apiKey, prompt, maxTokens = 2000, phase } = req.body;
 
   if (!apiKey) {
     return res.status(400).json({ error: 'API key is required' });
@@ -54,6 +75,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Select the appropriate model based on the phase
+    const model = phase ? getModelForPhase(phase) : 'claude-haiku-4-5';
+
     // Wrap the API call with retry logic
     const result = await retryWithExponentialBackoff(async () => {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -64,7 +88,7 @@ export default async function handler(req, res) {
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: "claude-haiku-4-5",
+          model: model,
           max_tokens: maxTokens,
           messages: [{ role: "user", content: prompt }]
         })

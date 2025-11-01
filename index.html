@@ -2050,7 +2050,7 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
       throw lastError;
     }
 
-    async function callClaude(prompt, maxTokens = 2000) {
+    async function callClaude(prompt, maxTokens = 2000, phase = null) {
       const apiKey = document.getElementById('apiKey').value.trim();
 
       if (!apiKey) {
@@ -2068,7 +2068,8 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
             body: JSON.stringify({
               apiKey,
               prompt,
-              maxTokens
+              maxTokens,
+              phase
             })
           });
 
@@ -2139,7 +2140,7 @@ Output: {
 }`;
 
       try {
-        let response = await callClaude(prompt);
+        let response = await callClaude(prompt, 2000, 'extraction');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const extracted = JSON.parse(response);
 
@@ -2261,7 +2262,7 @@ ROUTING RULES:
 Return ONLY the JSON object, no other text.`;
 
       try {
-        let response = await callClaude(prompt, 1500);
+        let response = await callClaude(prompt, 1500, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const analysis = JSON.parse(response);
 
@@ -2415,7 +2416,7 @@ CRITICAL: Be strict about categorization based on ACTUAL capabilities.
   Example: "FFmpeg batch processor" → EXECUTOR (agentic subtype, runs in Claude sandbox)`;
 
       try {
-        let response = await callClaude(prompt, 500);
+        let response = await callClaude(prompt, 500, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const categorization = JSON.parse(response);
 
@@ -2522,7 +2523,7 @@ Output: {
 Return ONLY the JSON object.`;
 
       try {
-        let response = await callClaude(prompt, 500);
+        let response = await callClaude(prompt, 500, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         return JSON.parse(response);
       } catch (err) {
@@ -2742,7 +2743,7 @@ alternative.
 Return ONLY the JSON object, no markdown, no other text.`;
 
       try {
-        let response = await callClaude(prompt, 2500);
+        let response = await callClaude(prompt, 2500, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const problemAnalysis = JSON.parse(response);
 
@@ -4238,7 +4239,7 @@ Rewrite the description to accurately reflect what Claude provides (knowledge, p
 Return ONLY the rewritten description (max 200 chars), nothing else.`;
 
       try {
-        const newDescription = await callClaude(prompt, 300);
+        const newDescription = await callClaude(prompt, 300, 'validation');
         metadata.description = newDescription.trim().replace(/^["']|["']$/g, '');
         addLog(`✓ Power-up rewritten: "${metadata.description}"`, 'success');
       } catch (err) {
@@ -4331,7 +4332,7 @@ Find any negative constraint language like "cannot", "unable to", "does not supp
 Return ONLY the "Responsibility Boundaries" section (markdown format), nothing else.`;
 
       try {
-        const boundariesSection = await callClaude(prompt, 400);
+        const boundariesSection = await callClaude(prompt, 400, 'validation');
 
         // Find limitations section and replace or add boundaries section
         if (documentation.includes('## Limitations')) {
@@ -4885,7 +4886,7 @@ Be specific and actionable. Reference the gathered resources where appropriate.`
       }
 
       try {
-        const findings = await callClaude(prompt, hasEnhancement ? 2000 : 1500);
+        const findings = await callClaude(prompt, hasEnhancement ? 2000 : 1500, 'research');
         addLog('Research complete', 'success');
         updateProgress('Research', 100, 'Research synthesis complete');
 
@@ -4976,7 +4977,7 @@ WHAT CLAUDE CAN DO:
 Return ONLY the JSON object, no other text.`;
 
       try {
-        let response = await callClaude(prompt, 1000);
+        let response = await callClaude(prompt, 1000, 'generation');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const parsed = JSON.parse(response);
 
@@ -5068,7 +5069,7 @@ Recommendations and tips for using this skill effectively
 Keep under 500 lines. Be specific, practical, and honest about constraints.`;
 
       try {
-        const docs = await callClaude(prompt, 4000);
+        const docs = await callClaude(prompt, 4000, 'generation');
         addLog('Documentation generated', 'success');
         updateProgress('Generate', 100, 'Generation complete');
         return docs;
@@ -5334,7 +5335,7 @@ Return your findings in this JSON format (no markdown, just JSON):
 
 Focus on authoritative sources and practical information.`;
 
-          const response = await callClaude(prompt, 800);
+          const response = await callClaude(prompt, 800, 'research');
 
           try {
             const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
@@ -5455,7 +5456,7 @@ Return ONLY a JSON array of skill objects (no markdown):
 
 If no similar skills exist, return an empty array: []`;
 
-        const response = await callClaude(prompt, 500);
+        const response = await callClaude(prompt, 500, 'research');
         const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const commonSkills = JSON.parse(cleaned);
 
@@ -5660,7 +5661,7 @@ Return ONLY valid JSON (no markdown):
 }`;
 
       try {
-        let response = await callClaude(prompt, 1500);
+        let response = await callClaude(prompt, 1500, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const result = JSON.parse(response);
 
@@ -5717,7 +5718,7 @@ Return ONLY valid JSON (no markdown):
 }`;
 
       try {
-        let response = await callClaude(prompt, 1500);
+        let response = await callClaude(prompt, 1500, 'research');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const parsed = JSON.parse(response);
         addLog(`✓ Found ${parsed.examples.length} concrete examples`, 'success');
@@ -5804,7 +5805,7 @@ Create a well-documented, production-ready script.
 Return ONLY the script code, no markdown, no explanations.`;
 
         try {
-          const code = await callClaude(prompt, 1500);
+          const code = await callClaude(prompt, 1500, 'generation');
           resources.scripts[scriptSpec.name] = code;
           addLog(`✓ Generated ${scriptSpec.name}`, 'success');
         } catch (err) {
@@ -5832,7 +5833,7 @@ SKILL: ${requirements.skill_name}
 Return ONLY the template content.`;
 
         try {
-          const template = await callClaude(prompt, 1000);
+          const template = await callClaude(prompt, 1000, 'generation');
           resources.assets[assetSpec.name] = template;
           addLog(`✓ Created ${assetSpec.name}`, 'success');
         } catch (err) {
@@ -5902,7 +5903,7 @@ Return ONLY valid JSON (no markdown):
 }`;
 
       try {
-        let response = await callClaude(prompt, 1500);
+        let response = await callClaude(prompt, 1500, 'validation');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const parsed = JSON.parse(response);
         return parsed.test_cases || [];
@@ -6117,7 +6118,7 @@ INSTRUCTIONS:
 Return the IMPROVED documentation (markdown only, no frontmatter):`;
 
       try {
-        const improvedDocs = await callClaude(prompt, 4000);
+        const improvedDocs = await callClaude(prompt, 4000, 'generation');
         addLog('✓ Generated improved documentation', 'success');
 
         // Return refined skill package
