@@ -145,19 +145,7 @@ See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) and [CONSTRAINT_VALIDATIO
 
 ## Examples
 
-**Try these prompts**:
-
-```
-Parse PDF tables into clean JSON, handle malformed data gracefully
-```
-
-```
-Build type-safe React forms with accessible error states
-```
-
-```
-Create REST API clients with token refresh, exponential backoff, request deduplication
-```
+Describe it once, and it becomes a reusable, automated skill.
 
 ## Tech Stack
 
