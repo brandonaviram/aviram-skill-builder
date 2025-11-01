@@ -4901,8 +4901,8 @@ When the user asks questions or requests tasks related to the topics covered in 
       addLog('Starting research pipeline...', 'info');
       updateProgress('Research', 10, 'Researching domain knowledge...');
 
-      // NEW: Stage 1 Enhancement - Web Research
-      const domainKnowledge = await researchDomain(requirements.skill_name);
+      // NEW: Stage 1 Enhancement - Web Research (now with concept extraction!)
+      const domainKnowledge = await researchDomain(requirements);
 
       updateProgress('Research', 30, 'Gathering resources and examples...');
 
@@ -5509,19 +5509,111 @@ Focus on sources that provide actionable implementation guidance.`;
     }
 
     /**
+     * Extract searchable concepts from skill name and description
+     * Prevents literal skill name searches like "codebase-dependency-analyzer official docs"
+     * Instead extracts real-world tools, techniques, and concepts to research
+     */
+    async function extractSearchConcepts(skillName, skillDescription) {
+      addLog('Extracting searchable concepts from skill requirements...', 'info');
+
+      const prompt = `Analyze this skill and extract REAL-WORLD searchable concepts.
+
+Skill Name: ${skillName}
+Description: ${skillDescription}
+
+CRITICAL: DO NOT use the skill name as a search term!
+The skill name is what we're BUILDING, not an existing product.
+
+Your task: Identify EXISTING tools, techniques, and concepts that already exist and can be researched.
+
+Return ONLY valid JSON (no markdown):
+{
+  "problem_domain": "general problem this solves (e.g., 'dependency analysis', 'API caching')",
+  "existing_tools": ["real tools that exist (e.g., 'pipdeptree', 'madge', 'redis')"],
+  "techniques": ["technical approaches (e.g., 'AST parsing', 'static analysis')"],
+  "file_types": ["relevant file formats (e.g., 'package.json', 'requirements.txt')"],
+  "programming_languages": ["languages involved (e.g., 'python', 'javascript')"],
+  "related_concepts": ["broader topics (e.g., 'circular dependencies', 'cache invalidation')"]
+}
+
+EXAMPLES:
+
+Input: "codebase-dependency-analyzer", "Analyze codebase structure and identify dependencies"
+Output: {
+  "problem_domain": "dependency analysis",
+  "existing_tools": ["dependency-cruiser", "madge", "pipdeptree", "npm ls"],
+  "techniques": ["static code analysis", "AST parsing", "build system parsing"],
+  "file_types": ["package.json", "requirements.txt", "pom.xml"],
+  "programming_languages": ["python", "javascript", "java"],
+  "related_concepts": ["circular dependencies", "dependency graphs", "build tools"]
+}
+
+Input: "api-response-cache", "Cache API responses for improved performance"
+Output: {
+  "problem_domain": "API response caching",
+  "existing_tools": ["redis", "memcached", "varnish"],
+  "techniques": ["HTTP cache headers", "cache invalidation", "TTL strategies"],
+  "file_types": ["cache configuration", "API specs"],
+  "programming_languages": ["python", "node.js"],
+  "related_concepts": ["cache invalidation", "cache-aside pattern", "CDN caching"]
+}
+
+Focus on what EXISTS in the real world that we can learn from.`;
+
+      try {
+        const response = await callClaude(prompt, 500, 'concept_extraction');
+        const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const concepts = JSON.parse(cleaned);
+
+        addLog(`✓ Extracted concepts: ${concepts.problem_domain}`, 'success');
+        addLog(`  Tools to research: ${concepts.existing_tools.slice(0, 3).join(', ')}`, 'info');
+
+        return concepts;
+      } catch (err) {
+        addLog(`⚠️ Concept extraction failed, falling back to generic search: ${err.message}`, 'warning');
+
+        // Fallback: use generic terms
+        return {
+          problem_domain: skillDescription.split(' ').slice(0, 3).join(' '),
+          existing_tools: [],
+          techniques: ["implementation patterns", "best practices"],
+          file_types: [],
+          programming_languages: ["python", "javascript"],
+          related_concepts: []
+        };
+      }
+    }
+
+    /**
      * Enhanced domain research with division of labor and progressive refinement
      * Implements specialized research agents with distinct focuses
      * NOW WITH PARALLEL EXECUTION for 3x speed improvement
+     * FIXED: Uses extracted concepts instead of literal skill names
      */
-    async function researchDomain(skillConcept) {
+    async function researchDomain(requirements) {
       addLog('Initializing specialized research agents...', 'info');
 
+      // NEW: Extract searchable concepts before creating research queries
+      const concepts = await extractSearchConcepts(requirements.skill_name, requirements.description);
+
       // Phase 1: Division of Labor - Create specialized research agents
+      // Build queries from extracted concepts (not literal skill name!)
+      // EXAMPLE: For "codebase-dependency-analyzer":
+      //   - primaryTool = "dependency-cruiser"
+      //   - primaryTechnique = "static code analysis"
+      //   - primaryLanguage = "python"
+      //   - problem_domain = "dependency analysis"
+      // This generates: "dependency-cruiser dependency analysis official documentation"
+      // Instead of: "codebase-dependency-analyzer official documentation" (non-existent product!)
+      const primaryTool = concepts.existing_tools[0] || concepts.problem_domain;
+      const primaryTechnique = concepts.techniques[0] || 'implementation';
+      const primaryLanguage = concepts.programming_languages[0] || 'python';
+
       const researchAgents = [
         {
           name: "docs_agent",
           focus: "Official documentation only",
-          query: `${skillConcept} official documentation API reference`,
+          query: `${primaryTool} ${concepts.problem_domain} official documentation API reference`,
           keywords: ["official", "docs", "API", "reference", "documentation"],
           must_find: ["API reference", "official documentation", "getting started guide"],
           expected_sources: 2,
@@ -5530,7 +5622,7 @@ Focus on sources that provide actionable implementation guidance.`;
         {
           name: "examples_agent",
           focus: "Working code examples from GitHub",
-          query: `${skillConcept} github examples implementation code`,
+          query: `${concepts.problem_domain} ${primaryLanguage} github examples implementation`,
           keywords: ["github", "example", "implementation", "code", "1000+ stars"],
           must_find: ["working code", "example repository", "implementation"],
           expected_sources: 3,
@@ -5539,7 +5631,7 @@ Focus on sources that provide actionable implementation guidance.`;
         {
           name: "practices_agent",
           focus: "Best practices and common patterns",
-          query: `${skillConcept} best practices patterns common issues`,
+          query: `${concepts.problem_domain} ${primaryTechnique} best practices patterns`,
           keywords: ["best practices", "patterns", "common issues", "pitfalls"],
           must_find: ["best practices", "design patterns", "troubleshooting"],
           expected_sources: 2,
@@ -5619,15 +5711,15 @@ Focus on sources that provide actionable implementation guidance.`;
       const refinementQueries = [];
 
       if (!hasOfficialDocs) {
-        refinementQueries.push(`${skillConcept} official documentation getting started`);
+        refinementQueries.push(`${primaryTool} official documentation getting started guide`);
         addLog('Gap detected: Missing official documentation - refining search', 'warning');
       }
       if (!hasGithub) {
-        refinementQueries.push(`${skillConcept} github popular repository examples`);
+        refinementQueries.push(`${concepts.problem_domain} ${primaryLanguage} github popular examples`);
         addLog('Gap detected: Missing GitHub examples - refining search', 'warning');
       }
       if (!hasBestPractices) {
-        refinementQueries.push(`${skillConcept} production best practices guide`);
+        refinementQueries.push(`${concepts.problem_domain} production best practices common pitfalls`);
         addLog('Gap detected: Missing best practices - refining search', 'warning');
       }
 
