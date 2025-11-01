@@ -1478,7 +1478,7 @@ The more texture you give, the sharper the output. But even 'email automation' i
 
             <div id="utilityProceedSection" class="hidden">
               <div class="status-badge success">
-                ✓ HIGH UTILITY - Proceeding to Research
+                ✓ HIGH UTILITY - Ready for Research
               </div>
               <div class="collapsible-section collapsed" id="researchDirectionSection">
                 <button class="collapsible-header" onclick="toggleCollapsibleSection('researchDirectionSection')">
@@ -1490,7 +1490,7 @@ The more texture you give, the sharper the output. But even 'email automation' i
                 </div>
               </div>
               <button class="btn success" onclick="continueToResearch()">
-                Continue to Research Phase →
+                Start Research Phase →
               </button>
             </div>
 
@@ -6427,7 +6427,7 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         await showUtilityResults(finalAnalysis, validationResult);
 
         // For HIGH_UTILITY, we could auto-proceed or wait for user
-        // Currently waiting for user to click "Continue to Research"
+        // Currently waiting for user to click "Start Research Phase"
         // REDESIGN and REJECT paths stop here and wait for user action
 
       } catch (err) {
