@@ -1648,6 +1648,102 @@ CLAUDE LIMITATIONS:
       }
     };
 
+    /**
+     * CLAUDE_CAPABILITIES_FOR_ANALYSIS - Full context for Phase 0 decision-making
+     * Used for categorization, utility analysis, and problem identification
+     */
+    const CLAUDE_CAPABILITIES_FOR_ANALYSIS = {
+      can_do: {
+        web_search_real_time: "Claude HAS web search capability (launched March 2025)",
+        bash_execution: "Claude Code CAN execute bash commands locally",
+        file_operations: "Claude Code CAN read/write files locally",
+        code_execution: "Claude Code CAN run scripts and commands",
+        algorithm_application: "Claude CAN apply algorithms and reasoning frameworks",
+        api_integration: "Claude CAN help build and execute API calls",
+        web_fetch: "Claude CAN fetch and analyze web content",
+        local_sandbox: "Claude Code has a local sandbox for safe code execution"
+      },
+
+      cannot_do: {
+        production_deployment: "Claude CANNOT autonomously deploy to production systems",
+        indefinite_operation: "Claude CANNOT run indefinitely without user supervision",
+        protected_system_access: "Claude CANNOT access protected systems without user permission",
+        permanent_state: "Claude CANNOT maintain state across independent sessions",
+        external_api_without_code: "Claude CANNOT access external APIs without user providing code/keys",
+        authenticated_services: "Claude CANNOT access authenticated services without user setup"
+      },
+
+      toPromptFormat: function() {
+        return `CRITICAL CAPABILITY FACTS (November 2025):
+
+✓ WHAT CLAUDE CAN DO:
+✓ ${this.can_do.web_search_real_time}
+✓ ${this.can_do.bash_execution}
+✓ ${this.can_do.file_operations}
+✓ ${this.can_do.code_execution}
+✓ ${this.can_do.algorithm_application}
+✓ ${this.can_do.api_integration}
+✓ ${this.can_do.web_fetch}
+✓ ${this.can_do.local_sandbox}
+
+✗ CLAUDE LIMITATIONS:
+✗ ${this.cannot_do.production_deployment}
+✗ ${this.cannot_do.indefinite_operation}
+✗ ${this.cannot_do.protected_system_access}
+✗ ${this.cannot_do.permanent_state}
+✗ ${this.cannot_do.external_api_without_code}
+✗ ${this.cannot_do.authenticated_services}`;
+      }
+    };
+
+    /**
+     * GENERATION_GUIDELINES - Concise guidelines for Phase 3 skill generation
+     * Focuses on length limits, style rules, and brevity
+     */
+    const GENERATION_GUIDELINES = {
+      length_limits: {
+        main_skill_md: 500,        // lines maximum
+        single_example: 50,        // lines per example
+        constraints_section: 100   // lines maximum
+      },
+
+      style_rules: [
+        "Use progressive disclosure (30-50 tokens at startup)",
+        "1-2 detailed examples per major use case (50 lines each MAX)",
+        "Constraints: only what's directly relevant to THIS skill",
+        "Move extended examples to /references/ directory if needed"
+      ],
+
+      capabilities_mention: [
+        "Claude Code can execute bash locally",
+        "Claude has web_search for current information",
+        "Skills cannot access external APIs without code execution"
+      ],
+
+      toPromptFormat: function() {
+        return `**GENERATION GUIDELINES - BE CONCISE**
+
+📏 LENGTH REQUIREMENTS (STRICT):
+- Main SKILL.md: MAXIMUM ${this.length_limits.main_skill_md} lines total
+- Each example: MAXIMUM ${this.length_limits.single_example} lines
+- Constraints section: MAXIMUM ${this.length_limits.constraints_section} lines
+- DO NOT create exhaustive lists of capabilities
+
+📝 STYLE RULES:
+${this.style_rules.map(rule => `- ${rule}`).join('\n')}
+
+⚡ KEY CAPABILITIES (brief mention only):
+${this.capabilities_mention.map(cap => `- ${cap}`).join('\n')}
+
+❗ CRITICAL:
+- Focus on THIS skill's specific use case
+- Only mention constraints directly relevant to THIS skill
+- DO NOT document all of Claude's capabilities
+- Keep examples practical and focused
+- If you need more examples, move them to /references/ directory`;
+      }
+    };
+
     const KNOWLEDGE_ENHANCEMENT_PROMPT = `You are a domain research specialist helping create the BEST POSSIBLE knowledge skill for Claude.
 
 Your mission: Transform a generic skill concept into a deeply specialized expertise package.
@@ -2181,7 +2277,7 @@ a skill request will genuinely power up Claude.
 Your north star: Skills power up Claude by providing NEW CAPABILITIES or by ORGANIZING/STRUCTURING
 knowledge in ways that make Claude measurably more effective. Both are valuable.
 
-${CLAUDE_CAPABILITIES.toPromptFormat()}
+${CLAUDE_CAPABILITIES_FOR_ANALYSIS.toPromptFormat()}
 
 Evaluate this skill request using these key questions:
 
@@ -2385,7 +2481,7 @@ EXECUTOR (EXTERNAL subtype): Requires systems Claude cannot control
 - Indicators: "system daemon", "hardware control", "live database", "production deployment", "external service", "privileged access", "hammerspoon", "autohotkey", "systemd", "cron"
 - Key test: Requires external systems, privileged access, or live services? If YES → EXECUTOR (external subtype, 2/10)
 
-${CLAUDE_CAPABILITIES.toPromptFormat()}
+${CLAUDE_CAPABILITIES_FOR_ANALYSIS.toPromptFormat()}
 
 CRITICAL: Be strict about categorization based on ACTUAL capabilities.
 - If unsure between TEMPLATE and METHODOLOGY, ask: "Can Claude apply
@@ -2636,7 +2732,7 @@ Your job is to research what practitioners in the ${domainContext.primary_domain
 domain actually struggle with, then suggest skill redesigns grounded in those
 real problems.
 
-${CLAUDE_CAPABILITIES.toPromptFormat()}
+${CLAUDE_CAPABILITIES_FOR_ANALYSIS.toPromptFormat()}
 
 Given a skill request, answer:
 
@@ -5034,39 +5130,30 @@ REQUIREMENTS: ${JSON.stringify(requirements)}
 METADATA: ${metadata}
 RESEARCH: ${research}${resourceInfo}
 
-CRITICAL - REALITY-BASED DOCUMENTATION:
-- Focus on what Claude can ACTUALLY do (frameworks, analysis, code examples)
-- If external tools/APIs needed, explicitly state where user must defer
-- Never promise real-time data, live integrations, or authenticated API calls
-- Include a "Limitations" section if the skill has constraints
-- Be honest about what requires user action vs Claude's capabilities
+${GENERATION_GUIDELINES.toPromptFormat()}
 
-Structure:
+DOCUMENTATION STRUCTURE:
 # Overview
-Brief description of what this skill actually does (not aspirational)
+Brief description (2-3 sentences) of what this skill does
 
 # When to Use
-Realistic trigger conditions and keywords
+Realistic trigger conditions and keywords (3-5 bullet points)
 
 # Key Features
 - Feature 1 (what Claude provides)
 - Feature 2 (realistic capabilities)
-
-# Limitations (if any)
-- What this skill cannot do
-- When to use external tools instead
-- Required user actions for complete workflows
+- Feature 3 (if applicable)
 
 # Usage Examples
-Concrete examples with code showing realistic scenarios
+1-2 concrete examples with code (MAXIMUM 50 lines each)
 
-# Implementation Details
-Technical approach within Claude's capabilities
+# Limitations (if directly relevant to THIS skill)
+Only mention constraints that matter for THIS specific skill
 
 # Best Practices
-Recommendations and tips for using this skill effectively
+3-5 practical tips for using this skill effectively
 
-Keep under 500 lines. Be specific, practical, and honest about constraints.`;
+BE CONCISE. Focus on practical usage, not exhaustive documentation.`;
 
       try {
         const docs = await callClaude(prompt, 4000, 'generation');
@@ -5098,6 +5185,28 @@ Keep under 500 lines. Be specific, practical, and honest about constraints.`;
       } else {
         validation.issues.push('Missing required YAML fields');
         addLog('YAML validation failed', 'error');
+      }
+
+      // Length validation - check for context inflation
+      updateProgress('Validate', 40, 'Checking length limits...');
+      const docLines = skillPackage.documentation.split('\n');
+      const lineCount = docLines.length;
+
+      if (lineCount > GENERATION_GUIDELINES.length_limits.main_skill_md) {
+        validation.warnings.push(`Documentation exceeds ${GENERATION_GUIDELINES.length_limits.main_skill_md} lines (${lineCount} lines)`);
+        addLog(`⚠️ Documentation is ${lineCount} lines (target: ${GENERATION_GUIDELINES.length_limits.main_skill_md} lines)`, 'warning');
+      } else {
+        addLog(`✓ Documentation length OK (${lineCount}/${GENERATION_GUIDELINES.length_limits.main_skill_md} lines)`, 'success');
+      }
+
+      // Check for overly verbose constraints section
+      const constraintsMatch = skillPackage.documentation.match(/##?\s*Limitations[\s\S]*?(?=##|$)/);
+      if (constraintsMatch) {
+        const constraintsLines = constraintsMatch[0].split('\n').length;
+        if (constraintsLines > GENERATION_GUIDELINES.length_limits.constraints_section) {
+          validation.warnings.push(`Constraints section too verbose (${constraintsLines} lines, max ${GENERATION_GUIDELINES.length_limits.constraints_section})`);
+          addLog(`⚠️ Constraints section is verbose (${constraintsLines} lines)`, 'warning');
+        }
       }
 
       // Constraint validation - check for overselling
