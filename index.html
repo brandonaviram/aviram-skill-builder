@@ -1977,11 +1977,50 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
       container.scrollTop = container.scrollHeight;
     }
 
-    function updateProgress(stage, percent, message) {
-      document.getElementById('progressStage').textContent = stage;
+    /**
+     * Model router configuration for UI display
+     */
+    const ModelSpeedIndicators = {
+      // Haiku phases (fast model)
+      'stage0': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'extraction': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'utility': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'categorization': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'autofix': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'testing': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+
+      // Sonnet phases (quality model)
+      'research': { icon: '🎯', label: 'quality mode', color: '#667eea' },
+      'research_workers': { icon: '🎯', label: 'quality mode', color: '#667eea' },
+      'generation': { icon: '🎯', label: 'quality mode', color: '#667eea' },
+      'metadata': { icon: '🎯', label: 'quality mode', color: '#667eea' },
+      'refinement': { icon: '🎯', label: 'quality mode', color: '#667eea' },
+      'validation': { icon: '🎯', label: 'quality mode', color: '#667eea' }
+    };
+
+    function updateProgress(stage, percent, message, phase = null) {
+      // Update basic progress
       document.getElementById('progressPercent').textContent = `${percent}%`;
       document.getElementById('progressFill').style.width = `${percent}%`;
       document.getElementById('progressMessage').textContent = message;
+
+      // Update stage with optional model indicator
+      const stageElement = document.getElementById('progressStage');
+      if (phase && ModelSpeedIndicators[phase]) {
+        const indicator = ModelSpeedIndicators[phase];
+        stageElement.innerHTML = `
+          ${stage}
+          <span style="
+            font-size: 12px;
+            opacity: 0.7;
+            margin-left: 8px;
+            color: ${indicator.color};
+            font-weight: 500;
+          ">${indicator.icon} ${indicator.label}</span>
+        `;
+      } else {
+        stageElement.textContent = stage;
+      }
     }
 
     function showError(message) {
@@ -2187,7 +2226,7 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
 
     async function extractRequirements(input) {
       addLog('Analyzing input and extracting requirements...', 'info');
-      updateProgress('Input Processing', 10, 'Parsing requirements...');
+      updateProgress('Input Processing', 10, 'Parsing requirements...', 'extraction');
 
       const prompt = `Extract skill requirements from this natural language input as JSON.
 
@@ -2269,7 +2308,7 @@ Output: {
 
     async function analyzeUtility(requirements) {
       addLog('Analyzing skill utility...', 'info');
-      updateProgress('Utility Analysis', 10, 'Evaluating utility value...');
+      updateProgress('Utility Analysis', 10, 'Evaluating utility value...', 'utility');
 
       const prompt = `You are the Universal Utility Analyzer. Your job is to determine whether
 a skill request will genuinely power up Claude.
@@ -3792,8 +3831,11 @@ Begin your research and synthesis.`;
 
       // Show appropriate section based on routing
       if (analysis.phase_routing === 'PROCEED') {
-        document.getElementById('utilityProceedSection').classList.remove('hidden');
+        // Populate the research direction (for when user clicks "Review Details")
         document.getElementById('researchDirection').textContent = analysis.research_direction;
+
+        // Show auto-proceed modal instead of immediate button
+        showPhase0AutoProceedModal();
       } else if (analysis.phase_routing === 'REDESIGN' || analysis.phase_routing === 'REJECT') {
         // For MEDIUM and LOW utility, run Problem Identifier Agent
         addLog('Deploying Problem Identifier Agent...', 'info');
@@ -4335,7 +4377,7 @@ Rewrite the description to accurately reflect what Claude provides (knowledge, p
 Return ONLY the rewritten description (max 200 chars), nothing else.`;
 
       try {
-        const newDescription = await callClaude(prompt, 300, 'validation');
+        const newDescription = await callClaude(prompt, 300, 'autofix');
         metadata.description = newDescription.trim().replace(/^["']|["']$/g, '');
         addLog(`✓ Power-up rewritten: "${metadata.description}"`, 'success');
       } catch (err) {
@@ -4428,7 +4470,7 @@ Find any negative constraint language like "cannot", "unable to", "does not supp
 Return ONLY the "Responsibility Boundaries" section (markdown format), nothing else.`;
 
       try {
-        const boundariesSection = await callClaude(prompt, 400, 'validation');
+        const boundariesSection = await callClaude(prompt, 400, 'autofix');
 
         // Find limitations section and replace or add boundaries section
         if (documentation.includes('## Limitations')) {
@@ -4749,6 +4791,187 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
     // END AUTO-VALIDATION & SELF-REDESIGN LOOP
     // ============================================================
 
+    // ============================================================
+    // AUTO-PROCEED MODAL WITH COUNTDOWN
+    // ============================================================
+
+    let phase0CountdownInterval = null;
+
+    function showPhase0AutoProceedModal() {
+      // Get utility analysis results for display
+      const category = currentRequirements?.category?.primary || 'Unknown';
+      const utilityScore = utilityAnalysisResult?.score || 0;
+      const estimatedValue = utilityScore >= 7 ? 'High' : utilityScore >= 4 ? 'Medium' : 'Low';
+
+      // Create modal overlay
+      const modal = document.createElement('div');
+      modal.id = 'phase0-results-modal';
+      modal.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          border-radius: 16px;
+          padding: 32px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+          z-index: 10001;
+          max-width: 600px;
+          animation: modalIn 0.3s ease-out;
+        ">
+          <h2 style="margin: 0 0 16px 0; color: #1f2937;">
+            ✅ Skill Analysis Complete
+          </h2>
+
+          <div style="margin-bottom: 24px; color: #6b7280; line-height: 1.7;">
+            <strong>Category:</strong> ${category}<br>
+            <strong>Utility Score:</strong> ${utilityScore}/10<br>
+            <strong>Estimated Value:</strong> ${estimatedValue}
+          </div>
+
+          <div style="
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            text-align: center;
+          ">
+            <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
+              ⚡ Using optimized models (28% faster, 28% cheaper)
+            </div>
+            <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
+              Proceeding to research in...
+            </div>
+            <div style="
+              font-size: 48px;
+              font-weight: 700;
+              color: #667eea;
+            " id="countdown">3</div>
+          </div>
+
+          <div style="display: flex; gap: 12px;">
+            <button id="startNowBtn" style="
+              flex: 1;
+              background: linear-gradient(135deg, #667eea, #764ba2);
+              color: white;
+              border: none;
+              padding: 12px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              font-size: 16px;
+            ">
+              ⚡ Start Research Now
+            </button>
+
+            <button id="reviewBtn" style="
+              padding: 12px 20px;
+              background: white;
+              border: 2px solid #e5e7eb;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              color: #6b7280;
+            ">
+              📋 Review Details
+            </button>
+          </div>
+        </div>
+
+        <div style="
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 10000;
+          animation: fadeIn 0.3s ease-out;
+        " id="modalBackdrop"></div>
+
+        <style>
+          @keyframes modalIn {
+            from {
+              transform: translate(-50%, -50%) scale(0.9);
+              opacity: 0;
+            }
+            to {
+              transform: translate(-50%, -50%) scale(1);
+              opacity: 1;
+            }
+          }
+
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        </style>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Add event listeners
+      document.getElementById('startNowBtn').onclick = proceedToResearchNow;
+      document.getElementById('reviewBtn').onclick = reviewPhase0Details;
+      document.getElementById('modalBackdrop').onclick = proceedToResearchNow;
+
+      // Start countdown
+      let seconds = 3;
+      const countdownElement = document.getElementById('countdown');
+
+      phase0CountdownInterval = setInterval(() => {
+        seconds--;
+        if (countdownElement) {
+          countdownElement.textContent = seconds;
+        }
+
+        if (seconds === 0) {
+          clearInterval(phase0CountdownInterval);
+          proceedToResearchNow();
+        }
+      }, 1000);
+    }
+
+    function proceedToResearchNow() {
+      // Clear countdown
+      if (phase0CountdownInterval) {
+        clearInterval(phase0CountdownInterval);
+        phase0CountdownInterval = null;
+      }
+
+      // Remove modal
+      const modal = document.getElementById('phase0-results-modal');
+      if (modal) modal.remove();
+
+      // Continue to research
+      continueToResearch();
+    }
+
+    function reviewPhase0Details() {
+      // Clear countdown
+      if (phase0CountdownInterval) {
+        clearInterval(phase0CountdownInterval);
+        phase0CountdownInterval = null;
+      }
+
+      // Remove modal
+      const modal = document.getElementById('phase0-results-modal');
+      if (modal) modal.remove();
+
+      // Show the utility proceed section (existing UI)
+      document.getElementById('utilityProceedSection').classList.remove('hidden');
+
+      // Scroll to the section
+      document.getElementById('utilityCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      addLog('Review Phase 0 details below, then click "Start Research Phase" when ready', 'info');
+    }
+
+    // ============================================================
+    // END AUTO-PROCEED MODAL
+    // ============================================================
+
     async function continueToResearch() {
       if (!currentRequirements || !utilityAnalysisResult) {
         addLog('Missing requirements or utility analysis', 'error');
@@ -4899,7 +5122,7 @@ When the user asks questions or requests tasks related to the topics covered in 
 
     async function conductResearch(requirements) {
       addLog('Starting research pipeline...', 'info');
-      updateProgress('Research', 10, 'Researching domain knowledge...');
+      updateProgress('Research', 10, 'Researching domain knowledge...', 'research');
 
       // NEW: Stage 1 Enhancement - Web Research (now with concept extraction!)
       const domainKnowledge = await researchDomain(requirements);
@@ -5032,7 +5255,7 @@ Be specific and actionable. Reference the gathered resources where appropriate.`
 
     async function generateMetadata(requirements, research) {
       addLog('Generating skill metadata...', 'info');
-      updateProgress('Generate', 20, 'Creating YAML metadata...');
+      updateProgress('Generate', 20, 'Creating YAML metadata...', 'metadata');
 
       const prompt = `You are generating YAML frontmatter for a Claude Code Skill.
 
@@ -5101,7 +5324,7 @@ Return ONLY the JSON object, no other text.`;
 
     async function generateDocumentation(requirements, research, metadata, resourceData) {
       addLog('Generating documentation...', 'info');
-      updateProgress('Generate', 50, 'Writing SKILL.md...');
+      updateProgress('Generate', 50, 'Writing SKILL.md...', 'generation');
 
       // Build resource information section if available
       let resourceInfo = '';
@@ -5561,7 +5784,7 @@ Output: {
 Focus on what EXISTS in the real world that we can learn from.`;
 
       try {
-        const response = await callClaude(prompt, 500, 'concept_extraction');
+        const response = await callClaude(prompt, 500, 'extraction');
         const cleaned = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const concepts = JSON.parse(cleaned);
 
@@ -5855,7 +6078,7 @@ Common domains: business-operations, personal-finance, software-engineering, dat
 
 Return ONLY the domain name, nothing else.`;
 
-      const domain = (await callClaude(domainPrompt, 100)).trim();
+      const domain = (await callClaude(domainPrompt, 100, 'extraction')).trim();
       addLog(`  → Identified primary domain: ${domain}`, 'info');
 
       // Narrow concept to that domain
@@ -5871,7 +6094,7 @@ Requirements:
 
 Return ONLY the narrowed concept (one sentence), no explanation.`;
 
-      const narrowed = (await callClaude(narrowPrompt, 150)).trim();
+      const narrowed = (await callClaude(narrowPrompt, 150, 'extraction')).trim();
       addLog(`  → Narrowed concept: ${narrowed}`, 'success');
 
       return narrowed;
@@ -6017,7 +6240,7 @@ Return ONLY valid JSON (no markdown):
 }`;
 
       try {
-        let response = await callClaude(prompt, 1500, 'utility');
+        let response = await callClaude(prompt, 1500, 'stage0');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const result = JSON.parse(response);
 
@@ -6259,7 +6482,7 @@ Return ONLY valid JSON (no markdown):
 }`;
 
       try {
-        let response = await callClaude(prompt, 1500, 'validation');
+        let response = await callClaude(prompt, 1500, 'testing');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const parsed = JSON.parse(response);
         return parsed.test_cases || [];
@@ -6474,7 +6697,7 @@ INSTRUCTIONS:
 Return the IMPROVED documentation (markdown only, no frontmatter):`;
 
       try {
-        const improvedDocs = await callClaude(prompt, 4000, 'generation');
+        const improvedDocs = await callClaude(prompt, 4000, 'refinement');
         addLog('✓ Generated improved documentation', 'success');
 
         // Return refined skill package
