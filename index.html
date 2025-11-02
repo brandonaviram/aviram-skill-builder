@@ -833,6 +833,119 @@
         0 0 24px rgba(242, 139, 130, 0.1);
     }
 
+    /* Phase 0 Complete - Inline Countdown Button */
+    .phase-complete {
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      background: rgba(129, 201, 149, 0.08);
+      border: 2px solid rgba(129, 201, 149, 0.3);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 24px 0;
+      animation: slideInFromTop 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow:
+        0 8px 32px rgba(129, 201, 149, 0.15),
+        0 0 40px rgba(129, 201, 149, 0.08);
+    }
+
+    .phase-complete h3 {
+      margin: 0 0 20px 0;
+      color: var(--accent-secondary);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .phase-complete p {
+      margin: 10px 0;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .phase-complete p strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    #continueBtn {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(138, 180, 248, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+      color: var(--accent-primary);
+      border: 2px solid var(--accent-primary);
+      padding: 18px 24px;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      margin: 20px 0 12px 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      letter-spacing: 0.3px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow:
+        0 4px 20px rgba(138, 180, 248, 0.25),
+        0 0 30px rgba(138, 180, 248, 0.15);
+    }
+
+    #continueBtn:hover {
+      transform: translateY(-3px);
+      background: linear-gradient(135deg, rgba(138, 180, 248, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+      border-color: rgba(138, 180, 248, 0.8);
+      box-shadow:
+        0 8px 32px rgba(138, 180, 248, 0.35),
+        0 0 40px rgba(138, 180, 248, 0.25);
+    }
+
+    #continueBtn:active {
+      transform: translateY(-1px);
+    }
+
+    .countdown-bar {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    #countdownProgress {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-primary), rgba(118, 75, 162, 0.8));
+      transition: width 1s linear;
+      border-radius: 6px;
+      box-shadow: 0 0 12px rgba(138, 180, 248, 0.6);
+    }
+
+    .phase-complete a {
+      color: var(--accent-primary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s ease;
+      display: inline-block;
+      margin-top: 8px;
+    }
+
+    .phase-complete a:hover {
+      color: rgba(138, 180, 248, 0.8);
+      text-decoration: underline;
+    }
+
+    @keyframes slideInFromTop {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .file-tree {
       margin-top: 24px;
       font-family: 'SF Mono', 'Courier New', monospace;
@@ -4792,7 +4905,7 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
     // ============================================================
 
     // ============================================================
-    // AUTO-PROCEED MODAL WITH COUNTDOWN
+    // AUTO-PROCEED INLINE COUNTDOWN
     // ============================================================
 
     let phase0CountdownInterval = null;
@@ -4802,174 +4915,108 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
       const category = currentRequirements?.category?.primary || 'Unknown';
       const utilityScore = utilityAnalysisResult?.score || 0;
       const estimatedValue = utilityScore >= 7 ? 'High' : utilityScore >= 4 ? 'Medium' : 'Low';
+      const powerUp = currentRequirements?.enhanced_requirements?.power_up || 'Advanced skill capabilities';
 
-      // Create modal overlay
-      const modal = document.createElement('div');
-      modal.id = 'phase0-results-modal';
-      modal.innerHTML = `
-        <div style="
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: white;
-          border-radius: 16px;
-          padding: 32px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-          z-index: 10001;
-          max-width: 600px;
-          animation: modalIn 0.3s ease-out;
-        ">
-          <h2 style="margin: 0 0 16px 0; color: #1f2937;">
-            ✅ Skill Analysis Complete
-          </h2>
+      // Show the utility proceed section (existing UI) with countdown
+      const proceedSection = document.getElementById('utilityProceedSection');
+      proceedSection.innerHTML = `
+        <div class="phase-complete">
+          <h3>✅ Phase 0 Complete</h3>
 
-          <div style="margin-bottom: 24px; color: #6b7280; line-height: 1.7;">
-            <strong>Category:</strong> ${category}<br>
-            <strong>Utility Score:</strong> ${utilityScore}/10<br>
-            <strong>Estimated Value:</strong> ${estimatedValue}
+          <p><strong>Category:</strong> ${category}</p>
+          <p><strong>Utility Score:</strong> ${utilityScore}/10</p>
+          <p><strong>Estimated Value:</strong> ${estimatedValue}</p>
+          <p><strong>Power-up:</strong> ${powerUp}</p>
+
+          <button id="continueBtn" onclick="skipCountdown()">
+            Continue to Research (<span id="countdown">10</span>s)
+          </button>
+
+          <div class="countdown-bar">
+            <div id="countdownProgress" style="width: 100%"></div>
           </div>
 
-          <div style="
-            background: #f3f4f6;
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 24px;
-            text-align: center;
-          ">
-            <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
-              ⚡ Using optimized models (28% faster, 28% cheaper)
-            </div>
-            <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
-              Proceeding to research in...
-            </div>
-            <div style="
-              font-size: 48px;
-              font-weight: 700;
-              color: #667eea;
-            " id="countdown">3</div>
-          </div>
-
-          <div style="display: flex; gap: 12px;">
-            <button id="startNowBtn" style="
-              flex: 1;
-              background: linear-gradient(135deg, #667eea, #764ba2);
-              color: white;
-              border: none;
-              padding: 12px;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              font-size: 16px;
-            ">
-              ⚡ Start Research Now
-            </button>
-
-            <button id="reviewBtn" style="
-              padding: 12px 20px;
-              background: white;
-              border: 2px solid #e5e7eb;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              color: #6b7280;
-            ">
-              📋 Review Details
-            </button>
-          </div>
+          <a href="#" onclick="showFullAnalysis(); return false;">View Full Analysis</a>
         </div>
-
-        <div style="
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 10000;
-          animation: fadeIn 0.3s ease-out;
-        " id="modalBackdrop"></div>
-
-        <style>
-          @keyframes modalIn {
-            from {
-              transform: translate(-50%, -50%) scale(0.9);
-              opacity: 0;
-            }
-            to {
-              transform: translate(-50%, -50%) scale(1);
-              opacity: 1;
-            }
-          }
-
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-        </style>
       `;
 
-      document.body.appendChild(modal);
+      proceedSection.classList.remove('hidden');
 
-      // Add event listeners
-      document.getElementById('startNowBtn').onclick = proceedToResearchNow;
-      document.getElementById('reviewBtn').onclick = reviewPhase0Details;
-      document.getElementById('modalBackdrop').onclick = proceedToResearchNow;
+      // Scroll to the section smoothly
+      document.getElementById('utilityCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-      // Start countdown
-      let seconds = 3;
+      // Start 10-second countdown
+      startResearchCountdown();
+    }
+
+    function startResearchCountdown() {
+      let seconds = 10;
       const countdownElement = document.getElementById('countdown');
+      const progressBar = document.getElementById('countdownProgress');
 
       phase0CountdownInterval = setInterval(() => {
         seconds--;
+
+        // Update countdown text
         if (countdownElement) {
           countdownElement.textContent = seconds;
         }
 
+        // Update progress bar (width decreases as time runs out)
+        if (progressBar) {
+          progressBar.style.width = `${(seconds / 10) * 100}%`;
+        }
+
+        // Auto-proceed when countdown finishes
         if (seconds === 0) {
           clearInterval(phase0CountdownInterval);
-          proceedToResearchNow();
+          phase0CountdownInterval = null;
+          continueToResearch();
         }
       }, 1000);
     }
 
-    function proceedToResearchNow() {
+    function skipCountdown() {
       // Clear countdown
       if (phase0CountdownInterval) {
         clearInterval(phase0CountdownInterval);
         phase0CountdownInterval = null;
       }
 
-      // Remove modal
-      const modal = document.getElementById('phase0-results-modal');
-      if (modal) modal.remove();
-
-      // Continue to research
+      // Proceed immediately
       continueToResearch();
     }
 
-    function reviewPhase0Details() {
+    function showFullAnalysis() {
       // Clear countdown
       if (phase0CountdownInterval) {
         clearInterval(phase0CountdownInterval);
         phase0CountdownInterval = null;
       }
 
-      // Remove modal
-      const modal = document.getElementById('phase0-results-modal');
-      if (modal) modal.remove();
+      // Expand all collapsible sections in the utility card
+      const collapsibleSections = document.querySelectorAll('#utilityCard .collapsible-section');
+      collapsibleSections.forEach(section => {
+        section.classList.remove('collapsed');
+      });
 
-      // Show the utility proceed section (existing UI)
-      document.getElementById('utilityProceedSection').classList.remove('hidden');
+      // Scroll to the utility card
+      document.getElementById('utilityCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-      // Scroll to the section
-      document.getElementById('utilityCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      addLog('Review the full Phase 0 analysis above. Click "Continue to Research" when ready.', 'info');
+    }
 
-      addLog('Review Phase 0 details below, then click "Start Research Phase" when ready', 'info');
+    // Legacy function name for compatibility
+    function proceedToResearchNow() {
+      skipCountdown();
+    }
+
+    function reviewPhase0Details() {
+      showFullAnalysis();
     }
 
     // ============================================================
-    // END AUTO-PROCEED MODAL
+    // END AUTO-PROCEED INLINE COUNTDOWN
     // ============================================================
 
     async function continueToResearch() {
