@@ -3,26 +3,29 @@
  * OPTIMIZED: Use Haiku (3x faster, 15x cheaper) for structured tasks
  * Use Sonnet for creative/complex tasks
  * Result: 28% faster, 28% cheaper, same quality
+ *
+ * NOTE: Using auto-updating aliases (claude-haiku-4-5, claude-sonnet-4-5)
+ * These automatically point to the latest model versions without manual updates
  */
 const AVIRAM_FACTORY_MODELS = {
   // Default to Sonnet for safety
-  default: 'claude-sonnet-4-5-20250929',
+  default: 'claude-sonnet-4-5',
 
   // === HAIKU PHASES (Structured/Deterministic Tasks) ===
-  stage0: 'claude-haiku-4-5-20251015',        // Viability Check (JSON scoring)
-  extraction: 'claude-haiku-4-5-20251015',    // Requirement Extraction (parsing)
-  utility: 'claude-haiku-4-5-20251015',       // Utility Analysis (structured scoring)
-  categorization: 'claude-haiku-4-5-20251015', // Skill Categorization (classification)
-  autofix: 'claude-haiku-4-5-20251015',       // Auto-fix validation loops (error fixing)
-  testing: 'claude-haiku-4-5-20251015',       // Test generation (structured output)
+  stage0: 'claude-haiku-4-5',        // Viability Check (JSON scoring)
+  extraction: 'claude-haiku-4-5',    // Requirement Extraction (parsing)
+  utility: 'claude-haiku-4-5',       // Utility Analysis (structured scoring)
+  categorization: 'claude-haiku-4-5', // Skill Categorization (classification)
+  autofix: 'claude-haiku-4-5',       // Auto-fix validation loops (error fixing)
+  testing: 'claude-haiku-4-5',       // Test generation (structured output)
 
   // === SONNET PHASES (Creative/Complex Tasks) ===
-  research: 'claude-sonnet-4-5-20250929',     // Research (deep reasoning, quality matters)
-  research_workers: 'claude-sonnet-4-5-20250929', // Parallel research agents
-  generation: 'claude-sonnet-4-5-20250929',   // Documentation (core value proposition)
-  metadata: 'claude-sonnet-4-5-20250929',     // Metadata generation (creative)
-  refinement: 'claude-sonnet-4-5-20250929',   // Iterative refinement (creative)
-  validation: 'claude-sonnet-4-5-20250929'    // Final validation (quality check)
+  research: 'claude-sonnet-4-5',     // Research (deep reasoning, quality matters)
+  research_workers: 'claude-sonnet-4-5', // Parallel research agents
+  generation: 'claude-sonnet-4-5',   // Documentation (core value proposition)
+  metadata: 'claude-sonnet-4-5',     // Metadata generation (creative)
+  refinement: 'claude-sonnet-4-5',   // Iterative refinement (creative)
+  validation: 'claude-sonnet-4-5'    // Final validation (quality check)
 };
 
 /**

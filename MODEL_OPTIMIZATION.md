@@ -12,7 +12,12 @@ Implemented intelligent model routing to use Haiku (fast, cheap) for structured 
 ## Changes Made
 
 ### 1. API Model Configuration (`api/claude.js`)
-Updated `AVIRAM_FACTORY_MODELS` to route phases to appropriate models:
+Updated `AVIRAM_FACTORY_MODELS` to route phases to appropriate models using auto-updating aliases:
+
+**Model Identifiers:**
+- Using `claude-haiku-4-5` (auto-updating Haiku alias)
+- Using `claude-sonnet-4-5` (auto-updating Sonnet alias)
+- These automatically point to latest versions without manual updates
 
 **Haiku Phases (Fast, Structured Tasks):**
 - `stage0` - Viability Check (JSON scoring)
