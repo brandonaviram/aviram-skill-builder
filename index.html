@@ -1941,6 +1941,633 @@ Why: Bridges quantitative analysis with narrative structure, visualization psych
 YOUR TASK:
 Research the provided skill concept deeply, synthesize expert-level knowledge, and output enhanced skill specifications in valid JSON format.`;
 
+    // ============================================
+    // REUSABLE CONTEXT RELIABILITY v1.3
+    // Assisted Fallback + Adaptive Research + Guards
+    // ============================================
+
+    /**
+     * ADAPTIVE_RESEARCH_CONFIG - Controls research behavior based on input completeness
+     *
+     * Modes:
+     * - full: Full research when all inputs (audience, goal, constraints) present
+     * - adaptive: Patterns-only research when inputs incomplete
+     * - none: Framework-only, no external research (when STRICT_MODE=true)
+     */
+    const ADAPTIVE_RESEARCH_CONFIG = {
+      mode: 'adaptive',  // 'full' | 'adaptive' | 'none'
+      STRICT_MODE: false,  // If true, forces mode='none'
+
+      getEffectiveMode: function(inputsComplete) {
+        if (this.STRICT_MODE) return 'none';
+        if (this.mode === 'full' && inputsComplete) return 'full';
+        if (this.mode === 'adaptive' && !inputsComplete) return 'adaptive';
+        return this.mode;
+      },
+
+      shouldUseResearch: function(inputsComplete) {
+        const effectiveMode = this.getEffectiveMode(inputsComplete);
+        return effectiveMode !== 'none';
+      },
+
+      getResearchScope: function(inputsComplete) {
+        const effectiveMode = this.getEffectiveMode(inputsComplete);
+        if (effectiveMode === 'full') return 'full_research';
+        if (effectiveMode === 'adaptive') return 'patterns_only';
+        return 'frameworks_only';
+      }
+    };
+
+    // Global state for context history (for inference)
+    let contextHistory = {
+      previousInputs: [],
+      inferredContext: {}
+    };
+
+    /**
+     * Check if required inputs (audience, goal, constraints) are present
+     * Returns object with completeness status and missing fields
+     */
+    function checkInputCompleteness(requirements) {
+      const missing = [];
+      const present = [];
+
+      // Check for audience
+      const audienceKeywords = ['audience', 'user', 'for', 'who', 'target', 'practitioner'];
+      const hasAudience = requirements.description &&
+        audienceKeywords.some(kw => requirements.description.toLowerCase().includes(kw));
+
+      if (!hasAudience && !requirements.audience) {
+        missing.push('audience');
+      } else {
+        present.push('audience');
+      }
+
+      // Check for goal
+      const goalKeywords = ['goal', 'objective', 'purpose', 'to', 'achieve', 'outcome', 'result'];
+      const hasGoal = requirements.description &&
+        goalKeywords.some(kw => requirements.description.toLowerCase().includes(kw));
+
+      if (!hasGoal && !requirements.goal) {
+        missing.push('goal');
+      } else {
+        present.push('goal');
+      }
+
+      // Check for constraints
+      const constraintKeywords = ['cannot', 'limitation', 'constraint', 'requires', 'depends', 'only'];
+      const hasConstraints = requirements.description &&
+        constraintKeywords.some(kw => requirements.description.toLowerCase().includes(kw));
+
+      if (!hasConstraints && !requirements.constraints) {
+        missing.push('constraints');
+      } else {
+        present.push('constraints');
+      }
+
+      return {
+        complete: missing.length === 0,
+        missing: missing,
+        present: present,
+        completeness_score: present.length / 3.0
+      };
+    }
+
+    /**
+     * Attempt to infer missing fields from context and history
+     * Returns inferred values and records what was inferred
+     */
+    async function inferMissingFields(requirements, missing) {
+      const inferred = {};
+      const inferredFields = [];
+
+      // Try to infer from description and domain
+      const description = requirements.description || '';
+      const skillName = requirements.skill_name || '';
+      const domain = requirements.domain || 'general';
+
+      for (const field of missing) {
+        if (field === 'audience') {
+          // Infer audience from domain and skill name
+          let audience = '<needed>';
+          if (domain && domain !== 'general') {
+            audience = `${domain} practitioners`;
+            inferredFields.push('audience');
+          } else if (description.includes('developer') || description.includes('engineer')) {
+            audience = 'developers and engineers';
+            inferredFields.push('audience');
+          } else if (description.includes('designer') || description.includes('creative')) {
+            audience = 'designers and creatives';
+            inferredFields.push('audience');
+          }
+          inferred.audience = audience;
+        }
+
+        if (field === 'goal') {
+          // Infer goal from description
+          let goal = '<needed>';
+          if (description.includes('improve') || description.includes('enhance')) {
+            goal = 'improve effectiveness';
+            inferredFields.push('goal');
+          } else if (description.includes('automate') || description.includes('streamline')) {
+            goal = 'automate and streamline workflow';
+            inferredFields.push('goal');
+          } else if (description.includes('learn') || description.includes('understand')) {
+            goal = 'understand and apply concepts';
+            inferredFields.push('goal');
+          }
+          inferred.goal = goal;
+        }
+
+        if (field === 'constraints') {
+          // Always infer some basic constraints
+          inferred.constraints = ['<needed - specify any limitations>'];
+          // Don't mark as inferred since we're just providing a placeholder
+        }
+      }
+
+      // Store inference in context history
+      contextHistory.inferredContext = {
+        ...contextHistory.inferredContext,
+        ...inferred,
+        timestamp: new Date().toISOString()
+      };
+
+      return {
+        inferred: inferred,
+        inferredFields: inferredFields
+      };
+    }
+
+    /**
+     * Generate mini examples for assisted prompt pack
+     * Creates 3 short, practical examples
+     */
+    async function generateMiniExamples(requirements, domain) {
+      const prompt = `Generate 3 concise, practical examples for a prompt pack.
+
+Domain: ${domain}
+Skill: ${requirements.skill_name}
+Description: ${requirements.description}
+
+Create 3 mini-examples (1-2 lines each) that show different approaches:
+1. Outcome-first approach
+2. Risk-reversal approach
+3. Proof-led approach
+
+Return ONLY valid JSON:
+{
+  "examples": [
+    "Example 1 text here",
+    "Example 2 text here",
+    "Example 3 text here"
+  ]
+}`;
+
+      try {
+        let response = await callClaude(prompt, 500, 'utility');
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const parsed = JSON.parse(response);
+        return parsed.examples || [
+          'Outcome-first headline approach',
+          'Risk-reversal CTA pattern',
+          'Proof-led alternative headline'
+        ];
+      } catch (err) {
+        // Fallback examples
+        return [
+          'Outcome-first: Focus on the end result',
+          'Risk-reversal: Address objections proactively',
+          'Proof-led: Lead with evidence or examples'
+        ];
+      }
+    }
+
+    /**
+     * Generate research notes for assisted prompt pack
+     * Creates short summary of frameworks/patterns discovered
+     */
+    async function generateResearchNotes(requirements, domain) {
+      const scope = ADAPTIVE_RESEARCH_CONFIG.getResearchScope(false);
+
+      if (scope === 'frameworks_only') {
+        return [
+          'Framework-only mode - no external research conducted',
+          'Using built-in Claude capabilities and patterns'
+        ];
+      }
+
+      const prompt = `Generate 2-3 brief research notes about ${domain} for ${requirements.skill_name}.
+
+Focus on:
+- Top frameworks or patterns in this domain
+- Recent best practices or testing approaches
+- Key considerations for practitioners
+
+Return ONLY valid JSON:
+{
+  "notes": [
+    "Note 1",
+    "Note 2",
+    "Note 3"
+  ]
+}`;
+
+      try {
+        let response = await callClaude(prompt, 500, 'research');
+        response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
+        const parsed = JSON.parse(response);
+        return parsed.notes || [
+          'Top frameworks surfaced for this domain',
+          'Recent testing patterns identified'
+        ];
+      } catch (err) {
+        return [
+          'Top frameworks surfaced for this domain',
+          'Recent testing patterns identified'
+        ];
+      }
+    }
+
+    /**
+     * Generate 3 clarifying questions for assisted prompt pack
+     */
+    function generateClarifyingQuestions(missing, requirements) {
+      const questions = [];
+
+      if (missing.includes('audience')) {
+        questions.push('Who is the primary audience for this skill?');
+      }
+
+      if (missing.includes('goal')) {
+        questions.push('What is the single most important success goal?');
+      }
+
+      if (missing.includes('constraints')) {
+        questions.push('Are there any tone, brand, or technical constraints?');
+      }
+
+      // Add a general question if we have less than 3
+      if (questions.length < 3) {
+        questions.push('What specific use cases do you have in mind?');
+      }
+
+      return questions.slice(0, 3);  // Max 3 questions
+    }
+
+    /**
+     * Create ASSISTED_PROMPT_PACK output
+     * Returns a structured mini prompt pack with examples, notes, and questions
+     */
+    async function createAssistedPromptPack(requirements, completenessCheck, inferenceResult) {
+      addLog('Creating assisted prompt pack...', 'info');
+      updateProgress('Assisted Fallback', 50, 'Generating mini examples and research notes...');
+
+      const domain = requirements.domain || 'general';
+
+      // Generate mini examples and research notes in parallel
+      const [miniExamples, researchNotes] = await Promise.all([
+        generateMiniExamples(requirements, domain),
+        generateResearchNotes(requirements, domain)
+      ]);
+
+      // Generate clarifying questions
+      const questions = generateClarifyingQuestions(completenessCheck.missing, requirements);
+
+      // Build the assisted prompt pack
+      const assistedPack = {
+        type: 'prompt_pack_assisted',
+        meta: {
+          route: 'fallback',
+          inferred: inferenceResult.inferredFields.length > 0,
+          inferred_fields: inferenceResult.inferredFields,
+          research_mode: ADAPTIVE_RESEARCH_CONFIG.getEffectiveMode(false),
+          completeness_score: completenessCheck.completeness_score
+        },
+        contents: {
+          domain: domain,
+          audience: inferenceResult.inferred.audience || '<needed>',
+          goal: inferenceResult.inferred.goal || '<needed>',
+          constraints: inferenceResult.inferred.constraints || ['<needed>'],
+          mini_examples: miniExamples,
+          research_notes: researchNotes
+        },
+        questions: questions,
+        actions: {
+          continue_with_answers: {
+            description: 'Continue generation with your answers',
+            endpoint: '/factory/continue',
+            method: 'POST',
+            payload_template: {
+              idempotency_key: `${requirements.skill_name}-${Date.now()}`,
+              answers: {
+                audience: '<your answer>',
+                goal: '<your answer>',
+                constraints: ['<your answer>']
+              }
+            }
+          }
+        },
+        test_metadata: {
+          metric: 'CTR',
+          variants: ['emotional', 'rational', 'hybrid'],
+          threshold: 'baseline +10%'
+        }
+      };
+
+      addLog('Assisted prompt pack created', 'success');
+      updateProgress('Assisted Fallback', 100, 'Ready for clarification');
+
+      return assistedPack;
+    }
+
+    /**
+     * Display assisted prompt pack to user
+     */
+    async function showAssistedPromptPack(assistedPack) {
+      // Hide progress card
+      document.getElementById('progressCard').classList.add('hidden');
+
+      // Create and show assisted pack UI
+      const container = document.getElementById('resultsContainer');
+      container.innerHTML = '';
+
+      const card = document.createElement('div');
+      card.className = 'aviram-surface';
+      card.innerHTML = `
+        <h2 style="color: var(--accent-primary); margin-bottom: 1.5rem;">📦 Mini Prompt Pack (Assisted)</h2>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">📋 Context</h3>
+          <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
+            <p><strong>Domain:</strong> ${assistedPack.contents.domain}</p>
+            <p><strong>Audience:</strong> ${assistedPack.contents.audience}</p>
+            <p><strong>Goal:</strong> ${assistedPack.contents.goal}</p>
+            <p><strong>Constraints:</strong> ${assistedPack.contents.constraints.join(', ')}</p>
+          </div>
+          ${assistedPack.meta.inferred ? `
+            <div style="background: rgba(138, 180, 248, 0.1); padding: 0.75rem; border-radius: 8px; border-left: 3px solid var(--accent-primary); margin-bottom: 1rem;">
+              <p style="margin: 0; font-size: 0.9rem;">
+                ℹ️ <strong>Inferred fields:</strong> ${assistedPack.meta.inferred_fields.join(', ')}
+              </p>
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">✨ Mini Examples</h3>
+          <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
+            ${assistedPack.contents.mini_examples.map((ex, i) => `
+              <div style="margin-bottom: 0.75rem;">
+                <span style="color: var(--accent-secondary);">${i + 1}.</span> ${ex}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">📚 Research Notes</h3>
+          <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
+            ${assistedPack.contents.research_notes.map(note => `
+              <div style="margin-bottom: 0.5rem;">• ${note}</div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">❓ Clarifying Questions</h3>
+          <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
+            ${assistedPack.questions.map((q, i) => `
+              <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--text-primary);">
+                  ${i + 1}. ${q}
+                </label>
+                <input type="text" id="answer_${i}"
+                  style="width: 100%; padding: 0.75rem; background: rgba(20, 22, 26, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: var(--text-primary);"
+                  placeholder="Your answer..." />
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">🧪 Test Metadata</h3>
+          <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
+            <p><strong>Metric:</strong> ${assistedPack.test_metadata.metric}</p>
+            <p><strong>Variants:</strong> ${assistedPack.test_metadata.variants.join(', ')}</p>
+            <p><strong>Threshold:</strong> ${assistedPack.test_metadata.threshold}</p>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn" onclick="continueWithAnswers()">
+            Continue with Answers →
+          </button>
+          <button class="btn btn-secondary" onclick="resetFactory()">
+            Start Over
+          </button>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(138, 180, 248, 0.05); border-radius: 8px; border: 1px solid rgba(138, 180, 248, 0.2);">
+          <h4 style="color: var(--accent-primary); font-size: 0.95rem; margin-bottom: 0.5rem;">📊 Routing Decision</h4>
+          <p style="margin: 0; font-size: 0.9rem;">
+            <strong>Decision:</strong> NOT VIABLE → Route: ASSISTED_PROMPT_PACK
+            ${assistedPack.meta.inferred_fields.length > 0 ? `(inferred=[${assistedPack.meta.inferred_fields.map(f => `'${f}'`).join(', ')}])` : ''}
+          </p>
+          <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+            <strong>Research Mode:</strong> ${assistedPack.meta.research_mode}
+          </p>
+        </div>
+      `;
+
+      container.appendChild(card);
+      container.classList.remove('hidden');
+
+      // Store assisted pack globally for continue function
+      window.currentAssistedPack = assistedPack;
+    }
+
+    /**
+     * Continue generation with user-provided answers
+     */
+    async function continueWithAnswers() {
+      const assistedPack = window.currentAssistedPack;
+      if (!assistedPack) {
+        addLog('No assisted pack found', 'error');
+        return;
+      }
+
+      // Collect answers from input fields
+      const answers = {};
+      assistedPack.questions.forEach((q, i) => {
+        const input = document.getElementById(`answer_${i}`);
+        if (input && input.value.trim()) {
+          const key = q.toLowerCase().includes('audience') ? 'audience' :
+                     q.toLowerCase().includes('goal') ? 'goal' :
+                     q.toLowerCase().includes('constraint') ? 'constraints' :
+                     `answer_${i}`;
+
+          if (key === 'constraints') {
+            answers[key] = [input.value.trim()];
+          } else {
+            answers[key] = input.value.trim();
+          }
+        }
+      });
+
+      // Validate that at least some answers provided
+      if (Object.keys(answers).length === 0) {
+        addLog('Please provide at least one answer to continue', 'warning');
+        return;
+      }
+
+      addLog('Continuing with provided answers...', 'info');
+
+      // Merge answers into current requirements
+      if (currentRequirements) {
+        Object.assign(currentRequirements, answers);
+
+        // Re-trigger generation pipeline from research phase
+        document.getElementById('resultsContainer').classList.add('hidden');
+        document.getElementById('progressCard').classList.remove('hidden');
+
+        try {
+          // Set generating flag
+          isGenerating = true;
+
+          // Continue to research phase with updated requirements
+          setStep(3);
+          await continueResearchPhase(currentRequirements);
+        } catch (err) {
+          showError(err.message);
+          addLog(`Generation failed: ${err.message}`, 'error');
+        } finally {
+          isGenerating = false;
+        }
+      }
+    }
+
+    /**
+     * Continue the research phase after user provides answers
+     * This continues the normal pipeline from research → generation → validation → package
+     */
+    async function continueResearchPhase(requirements) {
+      addLog('Resuming generation pipeline from research phase...', 'success');
+
+      try {
+        // Research phase
+        setStep(3);
+        const research = await conductResearch(requirements);
+
+        // Generate phase with auto-validation loop
+        setStep(4);
+        const result = await generateWithAutoValidation(requirements, research);
+
+        // Log auto-validation result
+        if (result.status === 'production_ready') {
+          addLog(`✓ Auto-validation succeeded in ${result.attempt} attempt(s)`, 'success');
+        } else if (result.status === 'partially_validated') {
+          addLog(`⚠️ Partial validation after ${result.attempt} attempt(s). ${result.remainingIssues.length} issue(s) remain.`, 'warning');
+        } else {
+          addLog(`⚠️ Max validation attempts reached. Proceeding with best version.`, 'warning');
+        }
+
+        const skillPackage = result.skillPackage;
+
+        // Final validation phase
+        setStep(5);
+        const validation = await validateGeneration(skillPackage);
+
+        if (validation.issues.length > 0) {
+          throw new Error(`Validation failed: ${validation.issues.join(', ')}`);
+        }
+
+        // Package phase
+        setStep(6);
+        const resourceData = research.resourceData || null;
+        const pkg = await packageSkill(skillPackage, requirements.skill_name, resourceData);
+
+        // Testing phase
+        setStep(7);
+        addLog('Starting skill testing phase...', 'info');
+        const testResults = await stage7_testSkill(skillPackage, requirements);
+
+        // Iterate if needed based on test results
+        const iterationResult = await stage8_iterateIfNeeded(
+          skillPackage,
+          testResults,
+          requirements,
+          0
+        );
+
+        // Use the final skill from iteration result
+        const finalSkill = iterationResult.finalSkill || skillPackage;
+        const finalTestResults = iterationResult.testResults || testResults;
+
+        // Build comprehensive metadata
+        const skillMetadata = {
+          skill_name: requirements.skill_name,
+          description: requirements.description,
+          created: new Date().toISOString(),
+          viability_score: requirements.viability_check?.viability_score || 0,
+          test_pass_rate: finalTestResults.passRate,
+          tests_passed: finalTestResults.passedTests,
+          tests_total: finalTestResults.totalTests,
+          iterations: iterationResult.iterations || 0,
+          status: iterationResult.status,
+          research_sources: research.domainKnowledge ?
+            Object.values(research.domainKnowledge)
+              .flatMap(r => r.sources || [])
+              .filter(s => s && s !== 'web-research') : [],
+          resources: {
+            scripts: resourceData ? Object.keys(resourceData.resources.scripts) : [],
+            references: resourceData ? Object.keys(resourceData.resources.references) : [],
+            assets: resourceData ? Object.keys(resourceData.resources.assets) : []
+          }
+        };
+
+        // Re-package with final skill and metadata
+        const finalPkg = await packageSkill(
+          finalSkill,
+          requirements.skill_name,
+          resourceData,
+          skillMetadata
+        );
+
+        // Pre-format the prompt for clipboard
+        const skillContent = `---\n${finalSkill.metadata}\n---\n\n${finalSkill.documentation}`;
+        const promptForClipboard = `You are now equipped with the following skill:
+
+---
+${skillContent}
+---
+
+When the user asks questions or requests tasks related to the topics covered in this skill, use the knowledge and guidelines from this skill to assist them.`;
+
+        // Store test results in package
+        generatedSkillData = {
+          package: finalPkg.content,
+          filename: finalPkg.filename,
+          tree: finalPkg.tree,
+          validation,
+          testResults: finalTestResults,
+          iterations: iterationResult.iterations,
+          status: iterationResult.status,
+          metadata: skillMetadata,
+          promptForClipboard: promptForClipboard
+        };
+
+        // Show final results
+        setStep(8);
+        await showResults(finalSkill, finalPkg.tree, validation, finalTestResults, skillMetadata);
+
+        addLog('Skill generation complete!', 'success');
+
+      } catch (err) {
+        throw err;
+      }
+    }
+
     // API Key localStorage Management
     function loadApiKey() {
       const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
@@ -5169,15 +5796,48 @@ When the user asks questions or requests tasks related to the topics covered in 
 
     async function conductResearch(requirements) {
       addLog('Starting research pipeline...', 'info');
+
+      // Check adaptive research mode
+      const inputsComplete = checkInputCompleteness(requirements).complete;
+      const researchScope = ADAPTIVE_RESEARCH_CONFIG.getResearchScope(inputsComplete);
+      const effectiveMode = ADAPTIVE_RESEARCH_CONFIG.getEffectiveMode(inputsComplete);
+
+      addLog(`Research mode: ${effectiveMode} (scope: ${researchScope})`, 'info');
+
       updateProgress('Research', 10, 'Researching domain knowledge...', 'research');
 
-      // NEW: Stage 1 Enhancement - Web Research (now with concept extraction!)
-      const domainKnowledge = await researchDomain(requirements);
+      let domainKnowledge = null;
+      let resourceData = null;
 
-      updateProgress('Research', 30, 'Gathering resources and examples...');
+      // Adaptive research based on configuration
+      if (researchScope === 'frameworks_only') {
+        addLog('Using framework-only mode (no external research)', 'info');
+        domainKnowledge = {
+          frameworks: 'Built-in Claude frameworks and capabilities',
+          sources: []
+        };
+        resourceData = {
+          examples: [],
+          resources: { scripts: {}, references: {}, assets: {} }
+        };
+      } else if (researchScope === 'patterns_only') {
+        addLog('Using adaptive mode (patterns-only research)', 'info');
+        // Lightweight research - just patterns, no deep dive
+        domainKnowledge = await researchDomain(requirements);
+        resourceData = {
+          examples: [],
+          resources: { scripts: {}, references: {}, assets: {} }
+        };
+      } else {
+        // Full research mode
+        addLog('Using full research mode', 'info');
+        domainKnowledge = await researchDomain(requirements);
 
-      // NEW: Stage 3 - Resource Gathering (replaces knowledge enhancement)
-      const resourceData = await stage3_gatherResourcesAndExamples(requirements, domainKnowledge);
+        updateProgress('Research', 30, 'Gathering resources and examples...');
+
+        // NEW: Stage 3 - Resource Gathering (replaces knowledge enhancement)
+        resourceData = await stage3_gatherResourcesAndExamples(requirements, domainKnowledge);
+      }
 
       updateProgress('Research', 60, 'Synthesizing research...');
 
@@ -6919,6 +7579,48 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
 
         // Store viability check results
         currentRequirements.viability_check = viabilityCheck;
+
+        // ========== REUSABLE CONTEXT RELIABILITY v1.3 ==========
+        // Soft Input Gate: Check for audience/goal/constraints completeness
+        addLog('Checking input completeness (audience, goal, constraints)...', 'info');
+        const completenessCheck = checkInputCompleteness(requirements);
+
+        if (!completenessCheck.complete) {
+          addLog(`⚠️ Input incomplete: missing ${completenessCheck.missing.join(', ')}`, 'warning');
+          addLog(`Completeness score: ${(completenessCheck.completeness_score * 100).toFixed(0)}%`, 'info');
+
+          // Attempt to infer missing fields
+          addLog('Attempting to infer missing fields from context...', 'info');
+          const inferenceResult = await inferMissingFields(requirements, completenessCheck.missing);
+
+          if (inferenceResult.inferredFields.length > 0) {
+            addLog(`✓ Inferred: ${inferenceResult.inferredFields.join(', ')}`, 'success');
+          } else {
+            addLog('Could not infer missing fields reliably', 'info');
+          }
+
+          // Route to ASSISTED_PROMPT_PACK (no full build)
+          addLog('📊 Decision: NOT VIABLE → Route: ASSISTED_PROMPT_PACK', 'warning');
+          addLog(`   (inferred=[${inferenceResult.inferredFields.map(f => `'${f}'`).join(', ')}])`, 'info');
+
+          // Update progress to show assisted fallback route
+          updateProgress('Assisted Fallback', 25, 'Creating mini prompt pack...');
+
+          // Create and show assisted prompt pack
+          const assistedPack = await createAssistedPromptPack(
+            requirements,
+            completenessCheck,
+            inferenceResult
+          );
+
+          await showAssistedPromptPack(assistedPack);
+
+          // Stop generation here - wait for user to provide answers
+          return;
+        }
+
+        addLog(`✓ Input completeness check passed: ${completenessCheck.present.join(', ')} present`, 'success');
+        // ========== END SOFT INPUT GATE ==========
 
         // Phase 0: Utility Analysis (runs after extraction)
         setStep(2);
