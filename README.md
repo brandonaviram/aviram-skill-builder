@@ -12,6 +12,56 @@ A beautiful, single-file web application that transforms rough ideas into produc
 - **Real-time Quality Checks**: 6 deterministic validation rules ensure production-ready skills
 - **One-Click Download**: Generates ready-to-install ZIP packages
 - **Glassmorphic UI**: Beautiful Aviram OS design language
+- **🎨 Ideation Mode**: Generate 3 different skill approaches from a single objective
+
+## Ideation Mode
+
+**New in v2.2**: Explore multiple approaches before committing to full generation.
+
+When you have a rough idea but aren't sure of the best approach, use **Ideation Mode** to generate 3 different skill variants:
+
+### How to Use
+
+1. Enter your objective in the input field
+2. Toggle to **"Ideate 3 Variants"** mode
+3. Choose your research depth:
+   - **Adaptive** (default): Smart research based on input completeness
+   - **Full**: Deep research with comprehensive patterns
+   - **Frameworks Only**: Quick ideation with minimal research
+4. Click "Ideate 3 Variants"
+5. Review the 3 different approaches
+6. Select one to generate the full skill
+
+### What You Get
+
+Each variant includes:
+- **Name**: Clear skill identifier
+- **Purpose**: What this variant accomplishes
+- **Approach**: What makes it unique
+- **Category**: Skill type (METHODOLOGY, KNOWLEDGE, etc.)
+- **Example Prompts**: 2 concrete usage examples
+- **Validation Task**: How to test the skill
+
+### Example Use Cases
+
+**Objective**: "I need help with copywriting for landing pages"
+
+**3 Variants Generated**:
+1. **copywriting-formula-framework** (METHODOLOGY)
+   - Template-based approach using proven formulas (AIDA, PAS, etc.)
+2. **landing-page-analyzer** (PROCESSOR)
+   - Analyze existing pages and provide improvement suggestions
+3. **conversion-psychology-guide** (KNOWLEDGE)
+   - Deep expertise in psychological triggers and persuasion patterns
+
+You can then select the approach that best fits your needs and generate the full skill.
+
+### Benefits
+
+- **Explore options** before investing in full generation
+- **Save time** by avoiding regeneration if first approach isn't right
+- **Discover approaches** you might not have considered
+- **One research pass** shared by all variants (efficient)
 
 ## Quick Start
 

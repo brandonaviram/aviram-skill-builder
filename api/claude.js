@@ -25,7 +25,8 @@ const AVIRAM_FACTORY_MODELS = {
   generation: 'claude-sonnet-4-5',   // Documentation (core value proposition)
   metadata: 'claude-sonnet-4-5',     // Metadata generation (creative)
   refinement: 'claude-sonnet-4-5',   // Iterative refinement (creative)
-  validation: 'claude-sonnet-4-5'    // Final validation (quality check)
+  validation: 'claude-sonnet-4-5',   // Final validation (quality check)
+  ideation: 'claude-sonnet-4-5'      // Ideation mode (creative variant generation)
 };
 
 /**
