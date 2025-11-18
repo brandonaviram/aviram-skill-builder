@@ -2289,8 +2289,8 @@ Generated: ${new Date().toISOString()}
         addLog(`Total time: ${elapsed} seconds`, 'info');
 
         // Show results
-        document.getElementById('resultsContainer').classList.remove('hidden');
-        document.getElementById('generatedFileTree').textContent = `${skillName}/\n  ├── SKILL.md\n  └── README.md`;
+        document.getElementById('resultsSection').classList.remove('hidden');
+        document.getElementById('fileTree').textContent = `${skillName}/\n  ├── SKILL.md\n  └── README.md`;
         document.getElementById('downloadBtn').classList.remove('hidden');
 
         // Track Express Mode usage
