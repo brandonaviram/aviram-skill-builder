@@ -398,6 +398,57 @@
         0 0 40px rgba(100, 100, 120, 0.2);
     }
 
+    /* Mode Toggle Switch */
+    .mode-toggle {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+    }
+
+    .mode-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .mode-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(138, 180, 248, 0.3);
+      border: 1px solid var(--accent-primary);
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+
+    .mode-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background: var(--accent-primary);
+      transition: 0.3s;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(138, 180, 248, 0.4);
+    }
+
+    .mode-toggle input:checked + .mode-slider {
+      background: rgba(100, 100, 120, 0.3);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .mode-toggle input:checked + .mode-slider:before {
+      transform: translateX(24px);
+      background: var(--text-secondary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
     @media (max-width: 768px) {
       body {
         padding: 16px;
@@ -1507,7 +1558,21 @@
             id="skillInput"
             placeholder="Describe it once, and it becomes a reusable, automated skill."
           ></textarea>
-          <button class="btn" id="generateBtn" onclick="startGeneration()">
+
+          <!-- Mode Toggle -->
+          <div class="mode-toggle-container" style="margin: 16px 0; display: flex; align-items: center; gap: 12px; justify-content: center;">
+            <span id="expressLabel" style="font-size: 13px; font-weight: 600; color: var(--accent-primary); transition: all 0.3s ease;">Express</span>
+            <label class="mode-toggle">
+              <input type="checkbox" id="modeToggle" onchange="toggleGenerationMode()">
+              <span class="mode-slider"></span>
+            </label>
+            <span id="advancedLabel" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all 0.3s ease;">Advanced</span>
+          </div>
+          <p id="modeDescription" style="text-align: center; font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; transition: all 0.3s ease;">
+            3 steps, ~30 seconds, same quality output
+          </p>
+
+          <button class="btn" id="generateBtn" onclick="handleGeneration()">
             Generate This Skill →
           </button>
 
@@ -1981,6 +2046,278 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
         return 'frameworks_only';
       }
     };
+
+    // ============================================
+    // EXPRESS MODE - Simplified 3-Stage Workflow
+    // ============================================
+    let isExpressMode = true; // Default to Express Mode
+
+    /**
+     * Toggle between Express and Advanced modes
+     */
+    function toggleGenerationMode() {
+      const toggle = document.getElementById('modeToggle');
+      const expressLabel = document.getElementById('expressLabel');
+      const advancedLabel = document.getElementById('advancedLabel');
+      const description = document.getElementById('modeDescription');
+
+      isExpressMode = !toggle.checked;
+
+      if (isExpressMode) {
+        expressLabel.style.color = 'var(--accent-primary)';
+        expressLabel.style.fontWeight = '600';
+        advancedLabel.style.color = 'var(--text-secondary)';
+        advancedLabel.style.fontWeight = '500';
+        description.textContent = '3 steps, ~30 seconds, same quality output';
+      } else {
+        expressLabel.style.color = 'var(--text-secondary)';
+        expressLabel.style.fontWeight = '500';
+        advancedLabel.style.color = 'var(--accent-primary)';
+        advancedLabel.style.fontWeight = '600';
+        description.textContent = '8+ steps with utility analysis, categorization, and validation loops';
+      }
+
+      // Track mode preference
+      localStorage.setItem('skill_factory_mode', isExpressMode ? 'express' : 'advanced');
+    }
+
+    /**
+     * Route to appropriate generation function based on mode
+     */
+    function handleGeneration() {
+      if (isExpressMode) {
+        startExpressGeneration();
+      } else {
+        startGeneration();
+      }
+    }
+
+    /**
+     * EXPRESS MODE: Simplified 3-stage workflow
+     * Stage 1: Understand - Extract core intent
+     * Stage 2: Research - Quick context gathering (optional)
+     * Stage 3: Generate - Create the skill package
+     */
+    async function startExpressGeneration() {
+      const input = document.getElementById('skillInput').value.trim();
+      if (!input || isGenerating) return;
+
+      const apiKey = document.getElementById('apiKey').value.trim();
+      if (!apiKey) {
+        alert('Please enter your Anthropic API key');
+        return;
+      }
+
+      try {
+        isGenerating = true;
+        document.getElementById('generateBtn').disabled = true;
+        document.getElementById('generateBtn').innerHTML = '⏳ Generating... <span class="loading-spinner"></span>';
+        document.getElementById('inputCard').classList.add('hidden');
+        document.getElementById('progressCard').classList.remove('hidden');
+        document.getElementById('logContainer').innerHTML = '';
+
+        // Skip utility card entirely in Express Mode
+        document.getElementById('utilityCard').classList.add('hidden');
+
+        const startTime = Date.now();
+
+        // ========== STAGE 1: UNDERSTAND ==========
+        setStep(1);
+        updateProgress('Understanding', 10, 'Analyzing your request...');
+        addLog('Stage 1: Understanding your request...', 'info');
+
+        const understandPrompt = `Extract the core intent from this skill request. Be concise and practical.
+
+User's request:
+"${input}"
+
+${CLAUDE_CAPABILITIES.toPromptFormat()}
+
+Return valid JSON only:
+{
+  "skill_name": "lowercase-hyphenated-name",
+  "type": "methodology|knowledge|code-generator|tool-executor",
+  "core_purpose": "One sentence describing what this helps Claude do",
+  "key_topics": ["topic1", "topic2", "topic3"],
+  "needs_research": true or false,
+  "constraints": ["any limitations or boundaries"]
+}
+
+Keep it simple. Focus on what the user actually needs.`;
+
+        const understandResponse = await callClaude(understandPrompt, 1000, 'haiku');
+        let intent;
+        try {
+          const jsonMatch = understandResponse.match(/\{[\s\S]*\}/);
+          intent = JSON.parse(jsonMatch ? jsonMatch[0] : understandResponse);
+        } catch (e) {
+          throw new Error('Failed to parse intent: ' + e.message);
+        }
+
+        addLog(`✓ Understood: ${intent.skill_name}`, 'success');
+        addLog(`Type: ${intent.type}, Topics: ${intent.key_topics.join(', ')}`, 'info');
+
+        // ========== STAGE 2: RESEARCH (Optional) ==========
+        setStep(3); // Skip to research step (visually)
+        let researchContext = '';
+
+        if (intent.needs_research && intent.key_topics.length > 0) {
+          updateProgress('Researching', 35, 'Gathering context...');
+          addLog('Stage 2: Quick research...', 'info');
+
+          const researchPrompt = `Research these topics for creating a Claude Code skill: ${intent.key_topics.join(', ')}
+
+Provide concise, actionable information:
+- Key concepts and terminology (3-5 items)
+- Best practices and patterns (3-5 items)
+- Common pitfalls to avoid (2-3 items)
+- Dependencies or requirements if applicable
+
+Keep total response under 400 words. Focus on practical implementation guidance.`;
+
+          researchContext = await callClaude(researchPrompt, 1500, 'haiku');
+          addLog('✓ Research complete', 'success');
+        } else {
+          addLog('✓ Skipping research (not needed)', 'info');
+        }
+
+        // ========== STAGE 3: GENERATE ==========
+        setStep(4); // Generate step
+        updateProgress('Generating', 60, 'Creating skill documentation...');
+        addLog('Stage 3: Generating skill package...', 'info');
+
+        const generatePrompt = `Create a complete Claude Code skill package.
+
+**Skill Intent:**
+- Name: ${intent.skill_name}
+- Type: ${intent.type}
+- Purpose: ${intent.core_purpose}
+- Topics: ${intent.key_topics.join(', ')}
+${intent.constraints.length > 0 ? `- Constraints: ${intent.constraints.join('; ')}` : ''}
+
+${researchContext ? `**Research Context:**\n${researchContext}\n` : ''}
+
+${GENERATION_GUIDELINES.toPromptFormat()}
+
+**Generate a complete SKILL.md file that includes:**
+
+1. YAML frontmatter with:
+   - name: "${intent.skill_name}"
+   - description: Clear one-line description
+   - category: ${intent.type}
+   - constraints: List actual limitations honestly
+   - version: "1.0.0"
+
+2. Main documentation:
+   - Brief overview (2-3 sentences)
+   - Core concepts/methodology
+   - 1-2 practical examples
+   - Usage guidelines
+   - Dependencies (if any)
+
+**IMPORTANT RULES:**
+- Stay under 300 lines total
+- Never promise capabilities beyond what's documented
+- Reframe limitations as responsibility boundaries
+- Include all dependencies with versions
+- Be specific and practical, not generic
+
+Return the complete SKILL.md content starting with the YAML frontmatter (---).`;
+
+        const skillContent = await callClaude(generatePrompt, 4000, 'sonnet');
+
+        // Validate basic structure
+        if (!skillContent.includes('---') || !skillContent.includes('name:')) {
+          throw new Error('Generated content missing required YAML frontmatter');
+        }
+
+        addLog('✓ Skill documentation generated', 'success');
+
+        // ========== PACKAGE ==========
+        setStep(6); // Package step
+        updateProgress('Packaging', 90, 'Creating ZIP package...');
+        addLog('Packaging skill...', 'info');
+
+        // Extract skill name from YAML for filename
+        const nameMatch = skillContent.match(/name:\s*["']?([^"'\n]+)["']?/);
+        const skillName = nameMatch ? nameMatch[1].trim() : intent.skill_name;
+
+        // Create README
+        const readme = `# ${skillName}
+
+## Installation
+
+1. Extract this ZIP to your Claude Code skills directory:
+   \`\`\`bash
+   # Global installation
+   unzip ${skillName}.zip -d ~/.claude/skills/
+
+   # Or project-specific
+   unzip ${skillName}.zip -d .claude/skills/
+   \`\`\`
+
+2. The skill will be automatically available to Claude Code.
+
+## Usage
+
+Reference this skill in your conversations with Claude Code. The skill provides ${intent.core_purpose.toLowerCase()}.
+
+## Generated By
+
+Deep Research Skill Factory (Express Mode)
+Generated: ${new Date().toISOString()}
+`;
+
+        // Create ZIP
+        const zip = new JSZip();
+        const folder = zip.folder(skillName);
+        folder.file('SKILL.md', skillContent);
+        folder.file('README.md', readme);
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        generatedSkillData = {
+          name: skillName,
+          blob: zipBlob,
+          content: skillContent
+        };
+
+        // ========== COMPLETE ==========
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        setStep(6);
+        updateProgress('Complete', 100, `Done in ${elapsed}s`);
+        addLog(`✓ Skill "${skillName}" ready for download!`, 'success');
+        addLog(`Total time: ${elapsed} seconds`, 'info');
+
+        // Show results
+        document.getElementById('resultsContainer').classList.remove('hidden');
+        document.getElementById('generatedFileTree').textContent = `${skillName}/\n  ├── SKILL.md\n  └── README.md`;
+        document.getElementById('downloadBtn').classList.remove('hidden');
+
+        // Track Express Mode usage
+        const expressUsage = parseInt(localStorage.getItem('express_mode_count') || '0') + 1;
+        localStorage.setItem('express_mode_count', expressUsage.toString());
+        localStorage.setItem('last_express_time', elapsed);
+
+      } catch (error) {
+        console.error('Express generation error:', error);
+        addLog(`❌ Error: ${error.message}`, 'error');
+        updateProgress('Error', 0, error.message);
+      } finally {
+        isGenerating = false;
+        document.getElementById('generateBtn').disabled = false;
+        document.getElementById('generateBtn').textContent = 'Generate This Skill →';
+      }
+    }
+
+    // Load saved mode preference on init
+    function loadModePreference() {
+      const savedMode = localStorage.getItem('skill_factory_mode');
+      if (savedMode === 'advanced') {
+        document.getElementById('modeToggle').checked = true;
+        isExpressMode = false;
+        toggleGenerationMode();
+      }
+    }
 
     // Global state for context history (for inference)
     let contextHistory = {
@@ -2663,6 +3000,7 @@ When the user asks questions or requests tasks related to the topics covered in 
       initAviramContext();
       renderStepper();
       loadApiKey();
+      loadModePreference();
     }
 
     function renderStepper() {
