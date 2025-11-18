@@ -2289,9 +2289,27 @@ Generated: ${new Date().toISOString()}
         addLog(`Total time: ${elapsed} seconds`, 'info');
 
         // Show results
-        document.getElementById('resultsSection').classList.remove('hidden');
-        document.getElementById('fileTree').textContent = `${skillName}/\n  ├── SKILL.md\n  └── README.md`;
-        document.getElementById('downloadBtn').classList.remove('hidden');
+        const resultsSection = document.getElementById('resultsSection');
+        const fileTree = document.getElementById('fileTree');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        if (resultsSection) {
+          resultsSection.classList.remove('hidden');
+        } else {
+          console.error('resultsSection element not found');
+        }
+
+        if (fileTree) {
+          fileTree.innerHTML = `<pre>${skillName}/\n  ├── SKILL.md\n  └── README.md</pre>`;
+        } else {
+          console.error('fileTree element not found');
+        }
+
+        if (downloadBtn) {
+          downloadBtn.classList.remove('hidden');
+        } else {
+          console.error('downloadBtn element not found');
+        }
 
         // Track Express Mode usage
         const expressUsage = parseInt(localStorage.getItem('express_mode_count') || '0') + 1;
