@@ -37,6 +37,41 @@ Skill: rhythmic-prose-craft
 
 The factory doesn't just document skills—it transfers measurable capability.
 
+### Side-by-Side: Same Prompt, Different Results
+
+**Prompt**: "Write a dramatic scene where a detective confronts a suspect in a rain-soaked alley"
+
+<table>
+<tr>
+<th>❌ Without Skill</th>
+<th>✅ With rhythmic-prose-craft Skill</th>
+</tr>
+<tr>
+<td>
+
+*"The rain hammered down as Detective Morrison cornered Vance against the brick wall, water streaming between them like a curtain of accusation."*
+
+</td>
+<td>
+
+*"The alley dripped. Sodium lights sputtered overhead, casting copper gleams across puddles deep as graves."*
+
+</td>
+</tr>
+<tr>
+<td>
+
+Generic imagery, uniform sentence length, no sonic devices
+
+</td>
+<td>
+
+Varied rhythm (3-16 words), alliteration ("copper gleams"), fresh metaphors
+
+</td>
+</tr>
+</table>
+
 ## Features
 
 - **9-Stage Pipeline**: Viability → Input → Utility → Research → Generate → Validate → Package → Testing → Review
