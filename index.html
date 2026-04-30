@@ -3217,8 +3217,15 @@ When the user asks questions or requests tasks related to the topics covered in 
       const container = document.getElementById('skillPreview');
       if (!container) return;
       const data = generatedSkillData || {};
-      const name = (data.name || (filename || '').replace(/\.zip$/, '') || 'your-skill').toString();
-      const description = (data.description || data.power_up || data.purpose || '').toString().trim();
+      const skillMd = data.content || data.package || '';
+      const fm = parseFrontmatter(skillMd);
+      const name = (data.name || fm.name || (filename || '').replace(/\.zip$/, '') || 'your-skill').toString();
+      const description = (
+        data.metadata?.description ||
+        fm.description ||
+        data.description ||
+        ''
+      ).toString().trim();
       const exampleAsk = data.example_invocation
         || (description ? description.replace(/^Claude /i, '').replace(/\.$/, '') : `use the ${name} skill`);
 
@@ -3249,6 +3256,24 @@ When the user asks questions or requests tasks related to the topics covered in 
       return String(s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function parseFrontmatter(md) {
+      const out = {};
+      if (typeof md !== 'string') return out;
+      const m = md.match(/^---\s*\n([\s\S]*?)\n---/);
+      if (!m) return out;
+      m[1].split('\n').forEach(line => {
+        const kv = line.match(/^([a-zA-Z_][\w-]*)\s*:\s*(.*)$/);
+        if (!kv) return;
+        let val = kv[2].trim();
+        if ((val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        out[kv[1]] = val;
+      });
+      return out;
     }
 
     function renderFileTree(node, depth = 0) {
