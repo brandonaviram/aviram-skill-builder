@@ -1543,15 +1543,15 @@
 
           <!-- Mode Toggle -->
           <div class="mode-toggle-container" style="margin: 16px 0; display: flex; align-items: center; gap: 12px; justify-content: center;">
-            <span id="expressLabel" style="font-size: 13px; font-weight: 600; color: var(--accent-primary); transition: all 0.3s ease;">Express</span>
+            <span id="expressLabel" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all 0.3s ease;">Express</span>
             <label class="mode-toggle">
-              <input type="checkbox" id="modeToggle" onchange="toggleGenerationMode()">
+              <input type="checkbox" id="modeToggle" onchange="toggleGenerationMode()" checked>
               <span class="mode-slider"></span>
             </label>
-            <span id="advancedLabel" style="font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all 0.3s ease;">Advanced</span>
+            <span id="advancedLabel" style="font-size: 13px; font-weight: 600; color: var(--accent-primary); transition: all 0.3s ease;">Advanced</span>
           </div>
           <p id="modeDescription" style="text-align: center; font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; transition: all 0.3s ease;">
-            Fast. Builds the skill in about 30 seconds.
+            Slower. Vets the idea before building, then validates the output. Use when the skill has to be right.
           </p>
 
           <button class="btn" id="generateBtn" onclick="handleGeneration()">
@@ -2059,7 +2059,7 @@ Research the provided skill concept deeply, synthesize expert-level knowledge, a
     // ============================================
     // EXPRESS MODE - Simplified 3-Stage Workflow
     // ============================================
-    let isExpressMode = true; // Default to Express Mode
+    let isExpressMode = false; // Default to Advanced Mode
 
     /**
      * Toggle between Express and Advanced modes
@@ -2324,12 +2324,13 @@ Generated: ${new Date().toISOString()}
       }
     }
 
-    // Load saved mode preference on init
+    // Load saved mode preference on init. Default is Advanced; only switch
+    // to Express if the user explicitly chose it before.
     function loadModePreference() {
       const savedMode = localStorage.getItem('skill_factory_mode');
-      if (savedMode === 'advanced') {
-        document.getElementById('modeToggle').checked = true;
-        isExpressMode = false;
+      if (savedMode === 'express') {
+        document.getElementById('modeToggle').checked = false;
+        isExpressMode = true;
         toggleGenerationMode();
       }
     }
@@ -2460,42 +2461,49 @@ Generated: ${new Date().toISOString()}
      * Creates 3 short, practical examples
      */
     async function generateMiniExamples(requirements, domain) {
-      const prompt = `Generate 3 concise, practical examples for a prompt pack.
+      const userInput = (requirements.description || requirements.skill_name || '').trim();
 
-Domain: ${domain}
-Skill: ${requirements.skill_name}
-Description: ${requirements.description}
+      const prompt = `The user typed a vague skill request and we need to help them narrow it down. Generate 3 concrete, distinct interpretations of what they might actually want to build.
 
-Create 3 mini-examples (1-2 lines each) that show different approaches:
-1. Outcome-first approach
-2. Risk-reversal approach
-3. Proof-led approach
+User's input: "${userInput}"
+${domain && domain !== 'general' ? `Likely domain: ${domain}` : ''}
+
+Each interpretation must:
+- Be a complete one-paragraph skill description, specific enough that we could build a Claude skill from it directly
+- Differ meaningfully from the others — different angle, scope, or use case, not just rewordings
+- Stay in the spirit of the user's input. Do not redirect to an unrelated topic.
+- Sound like something a real user would actually ask for (concrete verbs, real artifacts)
+
+These will appear as clickable cards titled "Pick the closest match". Whichever the user clicks becomes the new skill request.
 
 Return ONLY valid JSON:
 {
   "examples": [
-    "Example 1 text here",
-    "Example 2 text here",
-    "Example 3 text here"
+    "Full one-paragraph interpretation 1",
+    "Full one-paragraph interpretation 2",
+    "Full one-paragraph interpretation 3"
   ]
 }`;
 
+      const fallback = userInput
+        ? [
+            `Build a skill that handles "${userInput}" end to end, with clear inputs and outputs.`,
+            `Build a skill focused on the most common use case for "${userInput}", optimized for everyday workflows.`,
+            `Build a reference/teaching skill that explains "${userInput}" with examples and best practices.`
+          ]
+        : [
+            'Build a skill that takes a clear input and returns a structured result.',
+            'Build a skill that explains a workflow step-by-step with examples.',
+            'Build a skill that automates a repeatable task and surfaces the output.'
+          ];
+
       try {
-        let response = await callClaude(prompt, 500, 'utility');
+        let response = await callClaude(prompt, 700, 'utility');
         response = response.replace(/```json\s?/g, '').replace(/```\s?/g, '').trim();
         const parsed = JSON.parse(response);
-        return parsed.examples || [
-          'Outcome-first headline approach',
-          'Risk-reversal CTA pattern',
-          'Proof-led alternative headline'
-        ];
+        return Array.isArray(parsed.examples) && parsed.examples.length ? parsed.examples : fallback;
       } catch (err) {
-        // Fallback examples
-        return [
-          'Outcome-first: Focus on the end result',
-          'Risk-reversal: Address objections proactively',
-          'Proof-led: Lead with evidence or examples'
-        ];
+        return fallback;
       }
     }
 
