@@ -6076,11 +6076,6 @@ Return ONLY the "Responsibility Boundaries" section (markdown format), nothing e
         return;
       }
 
-      if (isGenerating) {
-        addLog('Generation already in progress', 'warning');
-        return;
-      }
-
       try {
         isGenerating = true;
         document.getElementById('utilityCard').classList.add('hidden');
@@ -8179,13 +8174,16 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
 
         utilityAnalysisResult = finalAnalysis;
 
-        // Hide progress card and show utility results
-        document.getElementById('progressCard').classList.add('hidden');
-        await showUtilityResults(finalAnalysis, validationResult);
-
-        // For HIGH_UTILITY, we could auto-proceed or wait for user
-        // Currently waiting for user to click "Start Research Phase"
-        // REDESIGN and REJECT paths stop here and wait for user action
+        // Auto-proceed past Phase 0. The user wants the smartest possible
+        // skill from whatever they typed — we don't gate on a verdict
+        // screen. The analysis still runs (its category/score informs
+        // downstream prompts) but the user stays on the progress surface
+        // and goes straight into research → build.
+        const verdict = finalAnalysis.utility_category
+          ? finalAnalysis.utility_category.replace('_', ' ').toLowerCase()
+          : 'analyzed';
+        addLog(`Verdict: ${verdict}. Proceeding to research.`, 'info');
+        await continueToResearch();
 
       } catch (err) {
         showError(err.message);
