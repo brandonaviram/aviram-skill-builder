@@ -452,6 +452,7 @@
     @media (max-width: 768px) {
       body {
         padding: 16px;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + 80px);
       }
 
       .button-group {
@@ -485,31 +486,21 @@
       }
 
       .stepper {
-        overflow-x: auto;
-        overflow-y: hidden;
-        justify-content: flex-start;
-        margin: 16px -16px;
-        padding: 12px 16px;
-        gap: 8px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none; /* Firefox */
-      }
-
-      .stepper::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Edge */
+        justify-content: space-between;
+        margin: 12px 0 20px;
+        padding: 8px 4px;
+        gap: 4px;
       }
 
       .step {
-        flex: 0 0 auto;
-        min-width: 64px;
-        scroll-snap-align: center;
+        flex: 1 1 0;
+        min-width: 0;
       }
 
       .step-circle {
-        width: 48px;
-        height: 48px;
-        font-size: 16px;
+        width: 44px;
+        height: 44px;
+        font-size: 15px;
       }
 
       .step-circle.active {
@@ -517,16 +508,17 @@
       }
 
       .step-label {
-        font-size: 10px;
-        margin-top: 10px;
-        white-space: nowrap;
-        max-width: 64px;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 11px;
+        margin-top: 8px;
+        letter-spacing: 0.3px;
+        text-align: center;
+        line-height: 1.2;
+        white-space: normal;
+        word-break: break-word;
       }
 
       .step-line {
-        top: 24px;
+        top: 22px;
       }
 
       /* Status Badge Responsiveness */
@@ -1805,7 +1797,7 @@
     let isGenerating = false;
 
     const steps = ['Viability', 'Input', 'Utility', 'Research', 'Generate', 'Validate', 'Package', 'Testing', 'Review'];
-    const phases = ['Understanding', 'Researching', 'Building', 'Done'];
+    const phases = ['Understand', 'Research', 'Build', 'Done'];
     const stepToPhase = [0, 0, 0, 1, 2, 2, 2, 2, 3];
     const API_KEY_STORAGE_KEY = 'anthropic_api_key';
 
@@ -2304,10 +2296,15 @@ Generated: ${new Date().toISOString()}
         addLog(`✓ Skill "${skillName}" ready for download!`, 'success');
         addLog(`Total time: ${elapsed} seconds`, 'info');
 
-        // Show results
-        document.getElementById('resultsContainer').classList.remove('hidden');
-        document.getElementById('generatedFileTree').textContent = `${skillName}/\n  ├── SKILL.md\n  └── README.md`;
-        document.getElementById('downloadBtn').classList.remove('hidden');
+        const tree = {
+          type: 'folder',
+          name: skillName,
+          children: [
+            { type: 'file', name: 'SKILL.md', size: skillContent.length },
+            { type: 'file', name: 'README.md', size: readme.length }
+          ]
+        };
+        showResults({ qualityScore: null, expressMode: true }, tree, `${skillName}.zip`);
 
         // Track Express Mode usage
         const expressUsage = parseInt(localStorage.getItem('express_mode_count') || '0') + 1;
@@ -2316,12 +2313,13 @@ Generated: ${new Date().toISOString()}
 
       } catch (error) {
         console.error('Express generation error:', error);
-        addLog(`❌ Error: ${error.message}`, 'error');
+        addLog(`✗ Error: ${error.message}`, 'error');
         updateProgress('Error', 0, error.message);
+        showError(error.message);
       } finally {
         isGenerating = false;
         document.getElementById('generateBtn').disabled = false;
-        document.getElementById('generateBtn').textContent = 'Generate This Skill →';
+        document.getElementById('generateBtn').textContent = 'Generate this skill →';
       }
     }
 
@@ -3200,9 +3198,18 @@ When the user asks questions or requests tasks related to the topics covered in 
       document.getElementById('progressSection').classList.add('hidden');
       document.getElementById('resultsSection').classList.remove('hidden');
 
-      const q = validation.qualityScore || 0;
+      const copyBtn = document.getElementById('copyPromptBtn');
+      if (copyBtn) {
+        copyBtn.style.display = generatedSkillData?.promptForClipboard ? '' : 'none';
+      }
+
+      const q = validation.qualityScore;
       let verdict;
-      if (q >= 85) verdict = 'Ready to use';
+      if (q == null) {
+        verdict = validation.expressMode
+          ? 'Built fast — Express mode skips validation, so eyeball it before shipping.'
+          : '';
+      } else if (q >= 85) verdict = 'Ready to use';
       else if (q >= 65) verdict = 'Good — minor rough edges';
       else verdict = 'Usable, but worth a review';
       document.getElementById('qualityScore').textContent = verdict;
@@ -8173,16 +8180,24 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
     function downloadSkill() {
       if (!generatedSkillData) return;
 
-      const url = URL.createObjectURL(generatedSkillData.package);
+      const blob = generatedSkillData.package || generatedSkillData.blob;
+      const filename = generatedSkillData.filename
+        || (generatedSkillData.name ? `${generatedSkillData.name}.zip` : 'skill.zip');
+      if (!blob) {
+        addLog('No skill package to download', 'error');
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = generatedSkillData.filename;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      addLog(`Downloaded ${generatedSkillData.filename}`, 'success');
+      addLog(`Downloaded ${filename}`, 'success');
     }
 
     async function copyPromptToClipboard() {
