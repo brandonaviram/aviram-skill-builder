@@ -1499,7 +1499,8 @@
 
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
-    details[open] > summary span:last-child::after { content: ''; }
+    .details-hint::after { content: 'Show'; }
+    details[open] > summary .details-hint::after { content: 'Hide'; }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
 </head>
@@ -1754,10 +1755,10 @@
       </div>
 
       <div class="aviram-surface">
-        <details id="logDetails">
+        <details id="logDetails" open>
           <summary style="cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;">
             <h2 style="margin: 0; font-size: 18px;">Details</h2>
-            <span style="font-size: 12px; color: var(--text-secondary); opacity: 0.7;">Show</span>
+            <span class="details-hint" style="font-size: 12px; color: var(--text-secondary); opacity: 0.7;"></span>
           </summary>
           <div class="log-container" id="logContainer" style="margin-top: 16px;">
             <p style="color: var(--text-secondary); opacity: 0.6;">Per-step log will appear here while generating.</p>
