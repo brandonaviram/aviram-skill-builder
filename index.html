@@ -2739,6 +2739,10 @@ Return ONLY valid JSON:
       container.classList.add('hidden');
       container.innerHTML = '';
       document.getElementById('skillInput').value = text;
+      // User just made an explicit choice from the assisted pack — that IS
+      // the clarification. Skip the completeness gate on this next run so
+      // we don't loop straight back to "Pick the closest match".
+      window.skipCompletenessGate = true;
       handleGeneration();
     }
 
@@ -8001,11 +8005,18 @@ Return the IMPROVED documentation (markdown only, no frontmatter):`;
         currentRequirements.viability_check = viabilityCheck;
 
         // ========== REUSABLE CONTEXT RELIABILITY v1.3 ==========
-        // Soft Input Gate: Check for audience/goal/constraints completeness
+        // Soft Input Gate: Check for audience/goal/constraints completeness.
+        // If the user just picked an assisted-pack card, they've already
+        // clarified — skip the gate or we loop back to the same screen.
+        const skipGate = window.skipCompletenessGate === true;
+        if (skipGate) {
+          window.skipCompletenessGate = false;
+          addLog('Resumed from clarification — skipping completeness check.', 'info');
+        }
         addLog('Checking input completeness (audience, goal, constraints)...', 'info');
         const completenessCheck = checkInputCompleteness(requirements);
 
-        if (!completenessCheck.complete) {
+        if (!skipGate && !completenessCheck.complete) {
           addLog(`⚠️ Input incomplete: missing ${completenessCheck.missing.join(', ')}`, 'warning');
           addLog(`Completeness score: ${(completenessCheck.completeness_score * 100).toFixed(0)}%`, 'info');
 
