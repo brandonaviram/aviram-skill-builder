@@ -1525,38 +1525,23 @@
     <div class="grid">
       <div>
         <div class="aviram-surface" id="inputCard">
-          <div class="api-config" id="apiConfig">
-            <!-- Collapsed State (shown when API key is saved) -->
-            <div class="api-config-header hidden" id="apiConfigCollapsed">
+          <!-- Collapsed key status — only renders once a key is saved -->
+          <div class="api-config collapsed hidden" id="apiConfig">
+            <div class="api-config-header" id="apiConfigCollapsed">
               <div class="api-config-status">
                 <span class="check-icon">✓</span>
-                <span class="status-text">API Key Configured</span>
+                <span class="status-text">API key saved</span>
               </div>
               <div class="api-config-actions">
                 <button class="api-config-btn edit" onclick="expandApiConfig()">Edit</button>
                 <button class="api-config-btn clear" onclick="clearApiKey()">Clear</button>
               </div>
             </div>
-
-            <!-- Expanded State (shown on first visit or when editing) -->
-            <div class="api-config-form" id="apiConfigForm">
-              <h3>⚙️ API Configuration</h3>
-              <p style="font-size: 13px; margin-bottom: 8px;">Enter your Anthropic API key to enable skill generation:</p>
-              <input
-                type="password"
-                id="apiKey"
-                placeholder="sk-ant-..."
-                autocomplete="off"
-                onchange="saveApiKey()"
-                onkeypress="if(event.key === 'Enter') saveApiKey()"
-              />
-              <p style="font-size: 11px; margin-top: 8px; opacity: 0.7;">Your key is stored locally in your browser only. Get one at console.anthropic.com</p>
-            </div>
           </div>
 
           <h2>What do you want Claude to know how to do?</h2>
           <p style="color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6;">
-            Think of a workflow you repeat. A technical thing you explain constantly. A pattern you wish Claude just *knew*. Write it here. The system researches, architects, and packages it into a skill Claude can use forever.
+            Think of a workflow you repeat. A technical thing you explain constantly. A pattern you wish Claude just <em>knew</em>. Write it here. The system researches, architects, and packages it into a skill Claude can use forever.
           </p>
           <textarea
             id="skillInput"
@@ -1577,21 +1562,36 @@
           </p>
 
           <button class="btn" id="generateBtn" onclick="handleGeneration()">
-            Generate This Skill →
+            Generate this skill →
           </button>
 
           <div class="examples">
-            <h3>Skills People Actually Use</h3>
+            <h3>Skills people actually use</h3>
             <button class="example-btn" onclick="setExample('Parse PDF tables and forms into structured JSON. Handle malformed PDFs, extract nested tables, preserve formatting context.')">→ PDF parsing with error handling</button>
             <button class="example-btn" onclick="setExample('Build accessible React forms with real-time validation, error recovery, and keyboard navigation. Include ARIA labels and focus management.')">→ Production-grade React forms</button>
             <button class="example-btn" onclick="setExample('Create REST API clients with token refresh, exponential backoff, request deduplication, and typed responses.')">→ Industrial-strength API wrappers</button>
+          </div>
+
+          <!-- API key form lives below the value prop. Hidden once a key is saved. -->
+          <div class="api-config-form" id="apiConfigForm" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.06);">
+            <h3 style="font-size: 14px; margin-bottom: 6px; color: var(--text-secondary); font-weight: 600;">Anthropic API key</h3>
+            <p style="font-size: 12px; margin-bottom: 8px; color: var(--text-secondary); opacity: 0.85;">Needed before the first generation. Stored only in this browser.</p>
+            <input
+              type="password"
+              id="apiKey"
+              placeholder="sk-ant-..."
+              autocomplete="off"
+              onchange="saveApiKey()"
+              onkeypress="if(event.key === 'Enter') saveApiKey()"
+            />
+            <p style="font-size: 11px; margin-top: 8px; opacity: 0.6;">Get one at console.anthropic.com</p>
           </div>
         </div>
 
         <div class="aviram-surface hidden" id="utilityCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
             <h2 style="margin: 0;">Is this worth building?</h2>
-            <a class="reset-link" onclick="resetFactory()">← New</a>
+            <a class="reset-link" onclick="resetFactory()">← Start over</a>
           </div>
 
           <div id="utilityResults">
@@ -1684,7 +1684,7 @@
                   Proceed Anyway
                 </button>
                 <button class="btn" onclick="resetFactory()">
-                  Start Over
+                  Start over
                 </button>
               </div>
             </div>
@@ -1701,7 +1701,7 @@
               </p>
               <div id="rejectAlternatives" style="margin: 20px 0;"></div>
               <button class="btn" onclick="resetFactory()">
-                Try a different idea
+                Start over
               </button>
             </div>
           </div>
@@ -1710,7 +1710,7 @@
         <div class="aviram-surface hidden" id="progressCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
             <h2 style="margin: 0;">Building your skill</h2>
-            <a class="reset-link" onclick="resetFactory()">← New</a>
+            <a class="reset-link" onclick="resetFactory()">← Start over</a>
           </div>
 
           <div id="progressSection">
@@ -1752,7 +1752,7 @@
               ✗ Couldn't build it
             </div>
             <p id="errorMessage" style="margin: 12px 0;"></p>
-            <button class="btn" onclick="resetFactory()">Try again</button>
+            <button class="btn" onclick="resetFactory()">Start over</button>
           </div>
         </div>
 
@@ -2658,7 +2658,7 @@ Return ONLY valid JSON:
         </p>
 
         <div style="margin-bottom: 2rem;">
-          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">📋 Context</h3>
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">Context</h3>
           <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
             <p><strong>Domain:</strong> ${assistedPack.contents.domain}</p>
             <p><strong>Audience:</strong> ${assistedPack.contents.audience}</p>
@@ -2675,7 +2675,7 @@ Return ONLY valid JSON:
         </div>
 
         <div style="margin-bottom: 2rem;">
-          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">✨ Mini Examples</h3>
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">Examples</h3>
           <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
             ${assistedPack.contents.mini_examples.map((ex, i) => `
               <div style="margin-bottom: 0.75rem;">
@@ -2686,7 +2686,7 @@ Return ONLY valid JSON:
         </div>
 
         <div style="margin-bottom: 2rem;">
-          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">📚 Research Notes</h3>
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">Research notes</h3>
           <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
             ${assistedPack.contents.research_notes.map(note => `
               <div style="margin-bottom: 0.5rem;">• ${note}</div>
@@ -2695,7 +2695,7 @@ Return ONLY valid JSON:
         </div>
 
         <div style="margin-bottom: 2rem;">
-          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">❓ Clarifying Questions</h3>
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">A few questions</h3>
           <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
             ${assistedPack.questions.map((q, i) => `
               <div style="margin-bottom: 1rem;">
@@ -2711,7 +2711,7 @@ Return ONLY valid JSON:
         </div>
 
         <div style="margin-bottom: 1rem;">
-          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">🧪 Test Metadata</h3>
+          <h3 style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">Test metadata</h3>
           <div style="background: rgba(20, 22, 26, 0.5); padding: 1rem; border-radius: 12px;">
             <p><strong>Metric:</strong> ${assistedPack.test_metadata.metric}</p>
             <p><strong>Variants:</strong> ${assistedPack.test_metadata.variants.join(', ')}</p>
@@ -2937,24 +2937,20 @@ When the user asks questions or requests tasks related to the topics covered in 
 
     function collapseApiConfig() {
       const apiConfig = document.getElementById('apiConfig');
-      const collapsedView = document.getElementById('apiConfigCollapsed');
       const formView = document.getElementById('apiConfigForm');
 
+      apiConfig.classList.remove('hidden');
       apiConfig.classList.add('collapsed');
-      collapsedView.classList.remove('hidden');
       formView.classList.add('hidden');
     }
 
     function expandApiConfig() {
       const apiConfig = document.getElementById('apiConfig');
-      const collapsedView = document.getElementById('apiConfigCollapsed');
       const formView = document.getElementById('apiConfigForm');
 
-      apiConfig.classList.remove('collapsed');
-      collapsedView.classList.add('hidden');
+      apiConfig.classList.add('hidden');
       formView.classList.remove('hidden');
 
-      // Focus the input field
       document.getElementById('apiKey').focus();
     }
 
@@ -3075,21 +3071,19 @@ When the user asks questions or requests tasks related to the topics covered in 
      * Model router configuration for UI display
      */
     const ModelSpeedIndicators = {
-      // Haiku phases (fast model)
-      'stage0': { icon: '⚡', label: 'fast mode', color: '#10b981' },
-      'extraction': { icon: '⚡', label: 'fast mode', color: '#10b981' },
-      'utility': { icon: '⚡', label: 'fast mode', color: '#10b981' },
-      'categorization': { icon: '⚡', label: 'fast mode', color: '#10b981' },
-      'autofix': { icon: '⚡', label: 'fast mode', color: '#10b981' },
-      'testing': { icon: '⚡', label: 'fast mode', color: '#10b981' },
+      'stage0':           { icon: '', label: 'fast', color: '#10b981' },
+      'extraction':       { icon: '', label: 'fast', color: '#10b981' },
+      'utility':          { icon: '', label: 'fast', color: '#10b981' },
+      'categorization':   { icon: '', label: 'fast', color: '#10b981' },
+      'autofix':          { icon: '', label: 'fast', color: '#10b981' },
+      'testing':          { icon: '', label: 'fast', color: '#10b981' },
 
-      // Sonnet phases (quality model)
-      'research': { icon: '🎯', label: 'quality mode', color: '#667eea' },
-      'research_workers': { icon: '🎯', label: 'quality mode', color: '#667eea' },
-      'generation': { icon: '🎯', label: 'quality mode', color: '#667eea' },
-      'metadata': { icon: '🎯', label: 'quality mode', color: '#667eea' },
-      'refinement': { icon: '🎯', label: 'quality mode', color: '#667eea' },
-      'validation': { icon: '🎯', label: 'quality mode', color: '#667eea' }
+      'research':         { icon: '', label: 'careful', color: '#667eea' },
+      'research_workers': { icon: '', label: 'careful', color: '#667eea' },
+      'generation':       { icon: '', label: 'careful', color: '#667eea' },
+      'metadata':         { icon: '', label: 'careful', color: '#667eea' },
+      'refinement':       { icon: '', label: 'careful', color: '#667eea' },
+      'validation':       { icon: '', label: 'careful', color: '#667eea' }
     };
 
     function updateProgress(stage, percent, message, phase = null) {
@@ -3110,7 +3104,7 @@ When the user asks questions or requests tasks related to the topics covered in 
             margin-left: 8px;
             color: ${indicator.color};
             font-weight: 500;
-          ">${indicator.icon} ${indicator.label}</span>
+          ">${indicator.label}</span>
         `;
       } else {
         stageElement.textContent = stage;
@@ -3133,7 +3127,7 @@ When the user asks questions or requests tasks related to the topics covered in 
       // Create clarification UI
       const clarificationHTML = `
         <div style="margin-top: 20px; padding: 20px; background: rgba(255, 152, 0, 0.1); border: 2px solid var(--warning); border-radius: 8px;">
-          <h3 style="color: var(--warning); margin-top: 0;">🤔 Which skill did you mean?</h3>
+          <h3 style="color: var(--warning); margin-top: 0;">Which one did you mean?</h3>
           <p style="margin-bottom: 15px;">Your input <strong>"${clarificationData.original_input}"</strong> could mean different things. Please choose:</p>
           <div id="clarificationOptions" style="display: flex; flex-direction: column; gap: 10px;">
             ${clarificationData.alternatives.map((alt, idx) => `
@@ -4868,7 +4862,7 @@ Begin your research and synthesis.`;
       if (validationResult && validationResult.hasContradictions) {
         let validationHTML = `
           <div style="background: rgba(248, 180, 174, 0.08); border: 1px solid rgba(248, 180, 174, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #f8b4ae; margin-bottom: 16px;">🛑 CONSTRAINT CONTRADICTIONS DETECTED</h3>
+            <h3 style="color: #f8b4ae; margin-bottom: 16px;">⚠ The idea contradicts its own constraints</h3>
 
             <div style="margin-bottom: 16px;">
               <div style="display: flex; gap: 20px; margin-bottom: 12px;">
